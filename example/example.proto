@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package mgrpc.example.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "gogoproto/gogo.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/stevvooe/mgrpc/example;example";
+
+service Example {
+	rpc Method1(Method1Request) returns (Method1Response);
+	rpc Method2(Method1Request) returns (google.protobuf.Empty);
+}
+
+message Method1Request {
+	string foo = 1;
+	string bar = 2;
+}
+
+message Method1Response {
+	string foo = 1;
+	string bar = 2;
+}
+
+message Method2Request {
+	string action = 1;
+}
