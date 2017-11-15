@@ -18,9 +18,12 @@ import proto "github.com/gogo/protobuf/proto"
 import fmt "fmt"
 import math "math"
 import _ "github.com/gogo/protobuf/types"
-import _ "github.com/golang/protobuf/ptypes/empty"
+import google_protobuf1 "github.com/gogo/protobuf/types"
 import _ "github.com/gogo/protobuf/gogoproto"
 import _ "github.com/gogo/protobuf/types"
+
+import context "context"
+import github_com_stevvooe_mgrpc "github.com/stevvooe/mgrpc"
 
 import strings "strings"
 import reflect "reflect"
@@ -179,6 +182,42 @@ func encodeVarintExample(dAtA []byte, offset int, v uint64) int {
 	}
 	dAtA[offset] = uint8(v)
 	return offset + 1
+}
+
+type ExampleService interface {
+	Method1(ctx context.Context, req *Method1Request) (*Method1Response, error)
+	Method2(ctx context.Context, req *Method1Request) (*google_protobuf1.Empty, error)
+}
+
+func RegisterExampleService(srv *github_com_stevvooe_mgrpc.Server, svc ExampleService) error {
+	return srv.Register("mgrpc.example.v1.Example", map[string]github_com_stevvooe_mgrpc.Handler{
+		"Method1": github_com_stevvooe_mgrpc.HandlerFunc(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return svc.Method1(ctx, req.(*Method1Request))
+		}),
+		"Method2": github_com_stevvooe_mgrpc.HandlerFunc(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return svc.Method2(ctx, req.(*Method1Request))
+		}),
+	})
+}
+
+type ExampleClient struct {
+	client *github_com_stevvooe_mgrpc.Client
+}
+
+func (c *ExampleClient) Method1(ctx context.Context, req *Method1Request) (*Method1Response, error) {
+	resp, err := c.client.Call(ctx, "mgrpc.example.v1.Example", "Method1", req)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*Method1Response), nil
+}
+
+func (c *ExampleClient) Method2(ctx context.Context, req *Method1Request) (*google_protobuf1.Empty, error) {
+	resp, err := c.client.Call(ctx, "mgrpc.example.v1.Example", "Method2", req)
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*google_protobuf1.Empty), nil
 }
 func (m *Method1Request) Size() (n int) {
 	var l int
