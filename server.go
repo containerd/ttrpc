@@ -38,6 +38,7 @@ func (s *Server) Serve(l net.Listener) error {
 		conn, err := l.Accept()
 		if err != nil {
 			log.L.WithError(err).Error("failed accept")
+			continue
 		}
 
 		go s.handleConn(conn)
