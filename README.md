@@ -1,4 +1,4 @@
-# mgrpc
+# ttrpc
 
 GRPC for low-memory environments.
 
@@ -19,8 +19,8 @@ GRPC services, as they do not speak the same protocol.
 # Usage
 
 Create a gogo vanity binary (see
-[`cmd/protoc-gen-gogomgrpc/main.go`](cmd/protoc-gen-gogomgrpc/main.go) for an
-example with the mgrpc plugin enabled.
+[`cmd/protoc-gen-gogottrpc/main.go`](cmd/protoc-gen-gogottrpc/main.go) for an
+example with the ttrpc plugin enabled.
 
 It's recommended to use [`protobuild`](https://github.com/stevvooe/protobuild)
 to build the protobufs for this project, but this will work with protoc
