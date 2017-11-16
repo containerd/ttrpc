@@ -12,6 +12,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const maxMessageSize = 8 << 10 // TODO(stevvooe): Cut these down, since they are pre-alloced.
+
 type channel struct {
 	conn net.Conn
 	bw   *bufio.Writer
@@ -21,13 +23,15 @@ type channel struct {
 func newChannel(conn net.Conn) *channel {
 	return &channel{
 		conn: conn,
-		bw:   bufio.NewWriter(conn),
-		br:   bufio.NewReader(conn),
+		bw:   bufio.NewWriterSize(conn, maxMessageSize),
+		br:   bufio.NewReaderSize(conn, maxMessageSize),
 	}
 }
 
 func (ch *channel) recv(ctx context.Context, msg interface{}) error {
 	defer log.G(ctx).WithField("msg", msg).Info("recv")
+
+	// TODO(stevvooe): Use `bufio.Reader.Peek` here to remove this allocation.
 	var p [maxMessageSize]byte
 	n, err := readmsg(ch.br, p[:])
 	if err != nil {

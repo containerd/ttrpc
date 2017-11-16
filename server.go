@@ -46,8 +46,6 @@ func (s *Server) Serve(l net.Listener) error {
 	return nil
 }
 
-const maxMessageSize = 1 << 20 // TODO(stevvooe): Cut these down, since they are pre-alloced.
-
 func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
 
