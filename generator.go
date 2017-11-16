@@ -1,4 +1,4 @@
-package mgrpc
+package ttrpc
 
 import (
 	"strings"
@@ -7,32 +7,32 @@ import (
 	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
 )
 
-type mgrpcGenerator struct {
+type ttrpcGenerator struct {
 	*generator.Generator
 	generator.PluginImports
 
 	typeurlPkg generator.Single
-	mgrpcPkg   generator.Single
+	ttrpcPkg   generator.Single
 	contextPkg generator.Single
 }
 
 func init() {
-	generator.RegisterPlugin(new(mgrpcGenerator))
+	generator.RegisterPlugin(new(ttrpcGenerator))
 }
 
-func (p *mgrpcGenerator) Name() string {
-	return "mgrpc"
+func (p *ttrpcGenerator) Name() string {
+	return "ttrpc"
 }
 
-func (p *mgrpcGenerator) Init(g *generator.Generator) {
+func (p *ttrpcGenerator) Init(g *generator.Generator) {
 	p.Generator = g
 }
 
-func (p *mgrpcGenerator) Generate(file *generator.FileDescriptor) {
+func (p *ttrpcGenerator) Generate(file *generator.FileDescriptor) {
 	p.PluginImports = generator.NewPluginImports(p.Generator)
 	p.contextPkg = p.NewImport("context")
 	p.typeurlPkg = p.NewImport("github.com/containerd/typeurl")
-	p.mgrpcPkg = p.NewImport("github.com/stevvooe/mgrpc")
+	p.ttrpcPkg = p.NewImport("github.com/stevvooe/ttrpc")
 
 	for _, service := range file.GetService() {
 		serviceName := service.GetName()
@@ -44,7 +44,7 @@ func (p *mgrpcGenerator) Generate(file *generator.FileDescriptor) {
 	}
 }
 
-func (p *mgrpcGenerator) genService(fullName string, service *descriptor.ServiceDescriptorProto) {
+func (p *ttrpcGenerator) genService(fullName string, service *descriptor.ServiceDescriptorProto) {
 	serviceName := service.GetName() + "Service"
 	p.P()
 	p.P("type ", serviceName, " interface{")
@@ -61,12 +61,12 @@ func (p *mgrpcGenerator) genService(fullName string, service *descriptor.Service
 
 	p.P()
 	// registration method
-	p.P("func Register", serviceName, "(srv *", p.mgrpcPkg.Use(), ".Server, svc ", serviceName, ") error {")
+	p.P("func Register", serviceName, "(srv *", p.ttrpcPkg.Use(), ".Server, svc ", serviceName, ") error {")
 	p.In()
-	p.P(`return srv.Register("`, fullName, `", map[string]`, p.mgrpcPkg.Use(), ".Handler{")
+	p.P(`return srv.Register("`, fullName, `", map[string]`, p.ttrpcPkg.Use(), ".Handler{")
 	p.In()
 	for _, method := range service.Method {
-		p.P(`"`, method.GetName(), `": `, p.mgrpcPkg.Use(), `.HandlerFunc(func(ctx context.Context, req interface{}) (interface{}, error) {`)
+		p.P(`"`, method.GetName(), `": `, p.ttrpcPkg.Use(), `.HandlerFunc(func(ctx context.Context, req interface{}) (interface{}, error) {`)
 		p.In()
 		p.P("return svc.", method.GetName(), "(ctx, req.(*", p.typeName(method.GetInputType()), "))")
 		p.Out()
@@ -82,11 +82,11 @@ func (p *mgrpcGenerator) genService(fullName string, service *descriptor.Service
 	p.P()
 	p.P("type ", clientStructType, " struct{")
 	p.In()
-	p.P("client *", p.mgrpcPkg.Use(), ".Client")
+	p.P("client *", p.ttrpcPkg.Use(), ".Client")
 	p.Out()
 	p.P("}")
 	p.P()
-	p.P("func New", clientType, "(client *", p.mgrpcPkg.Use(), ".Client)", serviceName, "{")
+	p.P("func New", clientType, "(client *", p.ttrpcPkg.Use(), ".Client)", serviceName, "{")
 	p.In()
 	p.P("return &", clientStructType, "{")
 	p.In()
@@ -115,11 +115,11 @@ func (p *mgrpcGenerator) genService(fullName string, service *descriptor.Service
 	}
 }
 
-func (p *mgrpcGenerator) objectNamed(name string) generator.Object {
+func (p *ttrpcGenerator) objectNamed(name string) generator.Object {
 	p.Generator.RecordTypeUse(name)
 	return p.Generator.ObjectNamed(name)
 }
 
-func (p *mgrpcGenerator) typeName(str string) string {
+func (p *ttrpcGenerator) typeName(str string) string {
 	return p.Generator.TypeName(p.objectNamed(str))
 }

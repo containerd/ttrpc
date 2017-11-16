@@ -1,4 +1,4 @@
-package mgrpc
+package ttrpc
 
 import (
 	"fmt"
