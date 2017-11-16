@@ -7,10 +7,11 @@ packages and at runtime. While this is great for many services with low density
 requirements, this can be a problem when running a large number of services on
 a single machine or on a machine with a small amount of memory.
 
-This project reduces the binary size and protocol overhead when working with
-GRPC. We do this by eliding the `net/http` and `net/http2` package used by grpc
-with a lightweight framing protocol We do this by eliding the `net/http` and
-`net/http2` package used by grpc with a lightweight framing protocol.
+Using the same GRPC definitions, this project reduces the binary size and
+protocol overhead required. We do this by eliding the `net/http`, `net/http2`
+and `grpc` package used by grpc replacing it with a lightweight framing
+protocol. The result are smaller binaries that use less resident memory with
+the same ease of use as GRPC.
 
 Please note that while this project supports generating either end of the
 protocol, the generated service definitions will be incompatible with regular
@@ -33,7 +34,14 @@ directly, if required.
 - The client and server interface are identical whereas in GRPC there is a
   client and server interface that are different.
 - The Go stdlib context package is used instead.
+- No support for streams yet.
 
 # Status
 
 Very new. YMMV.
+
+TODO:
+
+- [ ] Plumb error codes and GRPC status
+- [ ] Remove use of any type and dependency on typeurl package
+- [ ] Ensure that protocol can support streaming in the future
