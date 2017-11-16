@@ -1,6 +1,8 @@
 package mgrpc
 
 import (
+	"strings"
+
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
 )
@@ -76,15 +78,27 @@ func (p *mgrpcGenerator) genService(fullName string, service *descriptor.Service
 	p.P("}")
 
 	clientType := service.GetName() + "Client"
+	clientStructType := strings.ToLower(clientType[:1]) + clientType[1:]
 	p.P()
-	p.P("type ", clientType, " struct{")
+	p.P("type ", clientStructType, " struct{")
 	p.In()
 	p.P("client *", p.mgrpcPkg.Use(), ".Client")
 	p.Out()
 	p.P("}")
+	p.P()
+	p.P("func New", clientType, "(client *", p.mgrpcPkg.Use(), ".Client)", serviceName, "{")
+	p.In()
+	p.P("return &", clientStructType, "{")
+	p.In()
+	p.P("client: client,")
+	p.Out()
+	p.P("}")
+	p.Out()
+	p.P("}")
+	p.P()
 	for _, method := range service.Method {
 		p.P()
-		p.P("func (c *", clientType, ") ", method.GetName(),
+		p.P("func (c *", clientStructType, ") ", method.GetName(),
 			"(ctx ", p.contextPkg.Use(), ".Context, ",
 			"req *", p.typeName(method.GetInputType()), ") ",
 			"(*", p.typeName(method.GetOutputType()), ", error) {")
