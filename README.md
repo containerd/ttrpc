@@ -26,6 +26,14 @@ It's recommended to use [`protobuild`](https://github.com/stevvooe/protobuild)
 to build the protobufs for this project, but this will work with protoc
 directly, if required.
 
+# Differences from GRPC
+
+- The protocol stack has been replaced with a lighter protocol that doesn't
+  require http, http2 and tls.
+- The client and server interface are identical whereas in GRPC there is a
+  client and server interface that are different.
+- The Go stdlib context package is used instead.
+
 # Status
 
 Very new. YMMV.
