@@ -1,4 +1,4 @@
-package ttrpc
+package plugin
 
 import (
 	"strings"
