@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/status"
 )
 
 type Client struct {
@@ -58,7 +60,15 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 		return err
 	}
 
-	return c.codec.Unmarshal(response.Payload, resp)
+	if err := c.codec.Unmarshal(response.Payload, resp); err != nil {
+		return err
+	}
+
+	if response.Status == nil {
+		return errors.New("no status provided on response")
+	}
+
+	return status.ErrorProto(response.Status)
 }
 
 func (c *Client) Close() error {
