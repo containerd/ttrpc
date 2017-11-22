@@ -9,6 +9,7 @@ import (
 
 type Server struct {
 	services *serviceSet
+	codec    codec
 }
 
 func NewServer() *Server {
@@ -43,35 +44,91 @@ func (s *Server) Serve(l net.Listener) error {
 func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
 
+	type (
+		request struct {
+			id  uint32
+			req *Request
+		}
+
+		response struct {
+			id   uint32
+			resp *Response
+		}
+	)
+
 	var (
-		ch          = newChannel(conn)
-		req         Request
+		ch          = newChannel(conn, conn)
 		ctx, cancel = context.WithCancel(context.Background())
+		responses   = make(chan response)
+		requests    = make(chan request)
+		recvErr     = make(chan error, 1)
+		done        = make(chan struct{})
 	)
 
 	defer cancel()
+	defer close(done)
 
-	// TODO(stevvooe): Recover here or in dispatch to handle panics in service
-	// methods.
+	go func() {
+		defer close(recvErr)
+		var p [messageLengthMax]byte
+		for {
+			mh, err := ch.recv(ctx, p[:])
+			if err != nil {
+				recvErr <- err
+				return
+			}
 
-	// every connection is just a simple in/out request loop. No complexity for
-	// multiplexing streams or dealing with head of line blocking, as this
-	// isn't necessary for shim control.
+			if mh.Type != messageTypeRequest {
+				// we must ignore this for future compat.
+				continue
+			}
+
+			var req Request
+			if err := s.codec.Unmarshal(p[:mh.Length], &req); err != nil {
+				recvErr <- err
+				return
+			}
+
+			select {
+			case requests <- request{
+				id:  mh.StreamID,
+				req: &req,
+			}:
+			case <-done:
+			}
+		}
+	}()
+
 	for {
-		if err := ch.recv(ctx, &req); err != nil {
-			log.L.WithError(err).Error("failed receiving message on channel")
-			return
-		}
+		select {
+		case request := <-requests:
+			go func(id uint32) {
+				p, status := s.services.call(ctx, request.req.Service, request.req.Method, request.req.Payload)
+				resp := &Response{
+					Status:  status.Proto(),
+					Payload: p,
+				}
 
-		p, status := s.services.call(ctx, req.Service, req.Method, req.Payload)
-
-		resp := &Response{
-			Status:  status.Proto(),
-			Payload: p,
-		}
-
-		if err := ch.send(ctx, resp); err != nil {
-			log.L.WithError(err).Error("failed sending message on channel")
+				select {
+				case responses <- response{
+					id:   id,
+					resp: resp,
+				}:
+				case <-done:
+				}
+			}(request.id)
+		case response := <-responses:
+			p, err := s.codec.Marshal(response.resp)
+			if err != nil {
+				log.L.WithError(err).Error("failed marshaling response")
+				return
+			}
+			if err := ch.send(ctx, response.id, messageTypeResponse, p); err != nil {
+				log.L.WithError(err).Error("failed sending message on channel")
+				return
+			}
+		case err := <-recvErr:
+			log.L.WithError(err).Error("error receiving message")
 			return
 		}
 	}

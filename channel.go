@@ -5,101 +5,95 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
-	"net"
 
-	"github.com/containerd/containerd/log"
-	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
-const maxMessageSize = 8 << 10 // TODO(stevvooe): Cut these down, since they are pre-alloced.
+const (
+	messageHeaderLength = 10
+	messageLengthMax    = 8 << 10
+)
 
-type channel struct {
-	conn net.Conn
-	bw   *bufio.Writer
-	br   *bufio.Reader
+type messageType uint8
+
+const (
+	messageTypeRequest  messageType = 0x1
+	messageTypeResponse messageType = 0x2
+)
+
+// messageHeader represents the fixed-length message header of 10 bytes sent
+// with every request.
+type messageHeader struct {
+	Length   uint32      // length excluding this header. b[:4]
+	StreamID uint32      // identifies which request stream message is a part of. b[4:8]
+	Type     messageType // message type b[8]
+	Flags    uint8       // reserved          b[9]
 }
 
-func newChannel(conn net.Conn) *channel {
+func readMessageHeader(p []byte, r io.Reader) (messageHeader, error) {
+	_, err := io.ReadFull(r, p[:messageHeaderLength])
+	if err != nil {
+		return messageHeader{}, err
+	}
+
+	return messageHeader{
+		Length:   binary.BigEndian.Uint32(p[:4]),
+		StreamID: binary.BigEndian.Uint32(p[4:8]),
+		Type:     messageType(p[8]),
+		Flags:    p[9],
+	}, nil
+}
+
+func writeMessageHeader(w io.Writer, p []byte, mh messageHeader) error {
+	binary.BigEndian.PutUint32(p[:4], mh.Length)
+	binary.BigEndian.PutUint32(p[4:8], mh.StreamID)
+	p[8] = byte(mh.Type)
+	p[9] = mh.Flags
+
+	_, err := w.Write(p[:])
+	return err
+}
+
+type channel struct {
+	bw    *bufio.Writer
+	br    *bufio.Reader
+	hrbuf [messageHeaderLength]byte // avoid alloc when reading header
+	hwbuf [messageHeaderLength]byte
+}
+
+func newChannel(w io.Writer, r io.Reader) *channel {
 	return &channel{
-		conn: conn,
-		bw:   bufio.NewWriterSize(conn, maxMessageSize),
-		br:   bufio.NewReaderSize(conn, maxMessageSize),
+		bw: bufio.NewWriter(w),
+		br: bufio.NewReader(r),
 	}
 }
 
-func (ch *channel) recv(ctx context.Context, msg interface{}) error {
-	defer log.G(ctx).WithField("msg", msg).Info("recv")
+func (ch *channel) recv(ctx context.Context, p []byte) (messageHeader, error) {
+	mh, err := readMessageHeader(ch.hrbuf[:], ch.br)
+	if err != nil {
+		return messageHeader{}, err
+	}
 
-	// TODO(stevvooe): Use `bufio.Reader.Peek` here to remove this allocation.
-	var p [maxMessageSize]byte
-	n, err := readmsg(ch.br, p[:])
+	if mh.Length > uint32(len(p)) {
+		return messageHeader{}, errors.Wrapf(io.ErrShortBuffer, "message length %v over buffer size %v", mh.Length, len(p))
+	}
+
+	if _, err := io.ReadFull(ch.br, p[:mh.Length]); err != nil {
+		return messageHeader{}, errors.Wrapf(err, "failed reading message")
+	}
+
+	return mh, nil
+}
+
+func (ch *channel) send(ctx context.Context, streamID uint32, t messageType, p []byte) error {
+	if err := writeMessageHeader(ch.bw, ch.hwbuf[:], messageHeader{Length: uint32(len(p)), StreamID: streamID, Type: t}); err != nil {
+		return err
+	}
+
+	_, err := ch.bw.Write(p)
 	if err != nil {
 		return err
 	}
 
-	switch msg := msg.(type) {
-	case proto.Message:
-		return proto.Unmarshal(p[:n], msg)
-	default:
-		return errors.Errorf("unnsupported type in channel: %#v", msg)
-	}
-}
-
-func (ch *channel) send(ctx context.Context, msg interface{}) error {
-	log.G(ctx).WithField("msg", msg).Info("send")
-	var p []byte
-	switch msg := msg.(type) {
-	case proto.Message:
-		var err error
-		// TODO(stevvooe): trickiest allocation of the bunch. This will be hard
-		// to get rid of without using `MarshalTo` directly.
-		p, err = proto.Marshal(msg)
-		if err != nil {
-			return err
-		}
-	default:
-		return errors.Errorf("unsupported type recv from channel: %#v", msg)
-	}
-
-	return writemsg(ch.bw, p)
-}
-
-func readmsg(r *bufio.Reader, p []byte) (int, error) {
-	mlen, err := binary.ReadVarint(r)
-	if err != nil {
-		return 0, errors.Wrapf(err, "failed reading message size")
-	}
-
-	if mlen > int64(len(p)) {
-		return 0, errors.Wrapf(io.ErrShortBuffer, "message length %v over buffer size %v", mlen, len(p))
-	}
-
-	nn, err := io.ReadFull(r, p[:mlen])
-	if err != nil {
-		return 0, errors.Wrapf(err, "failed reading message size")
-	}
-
-	if int64(nn) != mlen {
-		return 0, errors.Errorf("mismatched read against message length %v != %v", nn, mlen)
-	}
-
-	return int(mlen), nil
-}
-
-func writemsg(w *bufio.Writer, p []byte) error {
-	var (
-		mlenp [binary.MaxVarintLen64]byte
-		n     = binary.PutVarint(mlenp[:], int64(len(p)))
-	)
-
-	if _, err := w.Write(mlenp[:n]); err != nil {
-		return errors.Wrapf(err, "failed writing message header")
-	}
-
-	if _, err := w.Write(p); err != nil {
-		return errors.Wrapf(err, "failed writing message")
-	}
-
-	return w.Flush()
+	return ch.bw.Flush()
 }

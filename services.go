@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 
-	"github.com/containerd/containerd/log"
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
@@ -52,7 +51,6 @@ func (s *serviceSet) call(ctx context.Context, serviceName, methodName string, p
 }
 
 func (s *serviceSet) dispatch(ctx context.Context, serviceName, methodName string, p []byte) ([]byte, error) {
-	ctx = log.WithLogger(ctx, log.G(ctx).WithField("method", fullPath(serviceName, methodName)))
 	method, err := s.resolve(serviceName, methodName)
 	if err != nil {
 		return nil, err

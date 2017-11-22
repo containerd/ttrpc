@@ -3,6 +3,7 @@ package ttrpc
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"reflect"
 	"testing"
@@ -12,8 +13,10 @@ import (
 
 func TestReadWriteMessage(t *testing.T) {
 	var (
-		channel  bytes.Buffer
-		w        = bufio.NewWriter(&channel)
+		ctx      = context.Background()
+		buffer   bytes.Buffer
+		w        = bufio.NewWriter(&buffer)
+		ch       = newChannel(w, nil)
 		messages = [][]byte{
 			[]byte("hello"),
 			[]byte("this is a test"),
@@ -21,20 +24,21 @@ func TestReadWriteMessage(t *testing.T) {
 		}
 	)
 
-	for _, msg := range messages {
-		if err := writemsg(w, msg); err != nil {
+	for i, msg := range messages {
+		if err := ch.send(ctx, uint32(i), 1, msg); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	var (
 		received [][]byte
-		r        = bufio.NewReader(bytes.NewReader(channel.Bytes()))
+		r        = bufio.NewReader(bytes.NewReader(buffer.Bytes()))
+		rch      = newChannel(nil, r)
 	)
 
 	for {
 		var p [4096]byte
-		n, err := readmsg(r, p[:])
+		mh, err := rch.recv(ctx, p[:])
 		if err != nil {
 			if errors.Cause(err) != io.EOF {
 				t.Fatal(err)
@@ -42,7 +46,7 @@ func TestReadWriteMessage(t *testing.T) {
 
 			break
 		}
-		received = append(received, p[:n])
+		received = append(received, p[:mh.Length])
 	}
 
 	if !reflect.DeepEqual(received, messages) {
@@ -52,64 +56,30 @@ func TestReadWriteMessage(t *testing.T) {
 
 func TestSmallBuffer(t *testing.T) {
 	var (
-		channel bytes.Buffer
-		w       = bufio.NewWriter(&channel)
-		msg     = []byte("a message of massive length")
+		ctx    = context.Background()
+		buffer bytes.Buffer
+		w      = bufio.NewWriter(&buffer)
+		ch     = newChannel(w, nil)
+		msg    = []byte("a message of massive length")
 	)
 
-	if err := writemsg(w, msg); err != nil {
+	if err := ch.send(ctx, 1, 1, msg); err != nil {
 		t.Fatal(err)
 	}
 
 	// now, read it off the channel with a small buffer
 	var (
-		p = make([]byte, len(msg)-1)
-		r = bufio.NewReader(bytes.NewReader(channel.Bytes()))
+		p   = make([]byte, len(msg)-1)
+		r   = bufio.NewReader(bytes.NewReader(buffer.Bytes()))
+		rch = newChannel(nil, r)
 	)
-	_, err := readmsg(r, p[:])
+
+	_, err := rch.recv(ctx, p[:])
 	if err == nil {
 		t.Fatalf("error expected reading with small buffer")
 	}
 
 	if errors.Cause(err) != io.ErrShortBuffer {
 		t.Fatalf("errors.Cause(err) should equal io.ErrShortBuffer: %v != %v", err, io.ErrShortBuffer)
-	}
-}
-
-func BenchmarkReadWrite(b *testing.B) {
-	b.StopTimer()
-	var (
-		messages = [][]byte{
-			[]byte("hello"),
-			[]byte("this is a test"),
-			[]byte("of message framing"),
-		}
-		total   int64
-		channel bytes.Buffer
-		w       = bufio.NewWriter(&channel)
-		p       [4096]byte
-	)
-
-	b.ReportAllocs()
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		msg := messages[i%len(messages)]
-		if err := writemsg(w, msg); err != nil {
-			b.Fatal(err)
-		}
-		total += int64(len(msg))
-	}
-	b.SetBytes(total)
-
-	r := bufio.NewReader(bytes.NewReader(channel.Bytes()))
-	for i := 0; i < b.N; i++ {
-		_, err := readmsg(r, p[:])
-		if err != nil {
-			if errors.Cause(err) != io.EOF {
-				b.Fatal(err)
-			}
-
-			break
-		}
 	}
 }
