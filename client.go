@@ -4,7 +4,8 @@ import (
 	"context"
 	"net"
 
-	"github.com/containerd/typeurl"
+	"github.com/gogo/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 type Client struct {
@@ -17,10 +18,17 @@ func NewClient(conn net.Conn) *Client {
 	}
 }
 
-func (c *Client) Call(ctx context.Context, service, method string, req interface{}) (interface{}, error) {
-	payload, err := typeurl.MarshalAny(req)
-	if err != nil {
-		return nil, err
+func (c *Client) Call(ctx context.Context, service, method string, req, resp interface{}) error {
+	var payload []byte
+	switch v := req.(type) {
+	case proto.Message:
+		var err error
+		payload, err = proto.Marshal(v)
+		if err != nil {
+			return err
+		}
+	default:
+		return errors.Errorf("ttrpc: unknown request type: %T", req)
 	}
 
 	request := Request{
@@ -30,22 +38,21 @@ func (c *Client) Call(ctx context.Context, service, method string, req interface
 	}
 
 	if err := c.channel.send(ctx, &request); err != nil {
-		return nil, err
+		return err
 	}
 
 	var response Response
-
 	if err := c.channel.recv(ctx, &response); err != nil {
-		return nil, err
+		return err
+	}
+	switch v := resp.(type) {
+	case proto.Message:
+		if err := proto.Unmarshal(response.Payload, v); err != nil {
+			return err
+		}
+	default:
+		return errors.Errorf("ttrpc: unknown response type: %T", resp)
 	}
 
-	// TODO(stevvooe): Reliance on the typeurl isn't great for bootstrapping
-	// and ease of use. Let's consider a request header frame and body frame as
-	// a better solution. This will allow the caller to set the exact type.
-	rpayload, err := typeurl.UnmarshalAny(response.Payload)
-	if err != nil {
-		return nil, err
-	}
-
-	return rpayload, nil
+	return nil
 }

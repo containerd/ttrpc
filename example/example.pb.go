@@ -278,14 +278,22 @@ type ExampleService interface {
 	Method2(ctx context.Context, req *Method1Request) (*google_protobuf.Empty, error)
 }
 
-func RegisterExampleService(srv *github_com_stevvooe_ttrpc.Server, svc ExampleService) error {
-	return srv.Register("ttrpc.example.v1.Example", map[string]github_com_stevvooe_ttrpc.Handler{
-		"Method1": github_com_stevvooe_ttrpc.HandlerFunc(func(ctx context.Context, req interface{}) (interface{}, error) {
-			return svc.Method1(ctx, req.(*Method1Request))
-		}),
-		"Method2": github_com_stevvooe_ttrpc.HandlerFunc(func(ctx context.Context, req interface{}) (interface{}, error) {
-			return svc.Method2(ctx, req.(*Method1Request))
-		}),
+func RegisterExampleService(srv *github_com_stevvooe_ttrpc.Server, svc ExampleService) {
+	srv.Register("ttrpc.example.v1.Example", map[string]github_com_stevvooe_ttrpc.Method{
+		"Method1": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
+			var req Method1Request
+			if err := unmarshal(&req); err != nil {
+				return nil, err
+			}
+			return svc.Method1(ctx, &req)
+		},
+		"Method2": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
+			var req Method1Request
+			if err := unmarshal(&req); err != nil {
+				return nil, err
+			}
+			return svc.Method2(ctx, &req)
+		},
 	})
 }
 
@@ -300,19 +308,19 @@ func NewExampleClient(client *github_com_stevvooe_ttrpc.Client) ExampleService {
 }
 
 func (c *exampleClient) Method1(ctx context.Context, req *Method1Request) (*Method1Response, error) {
-	resp, err := c.client.Call(ctx, "ttrpc.example.v1.Example", "Method1", req)
-	if err != nil {
+	var resp Method1Response
+	if err := c.client.Call(ctx, "ttrpc.example.v1.Example", "Method1", req, &resp); err != nil {
 		return nil, err
 	}
-	return resp.(*Method1Response), nil
+	return &resp, nil
 }
 
 func (c *exampleClient) Method2(ctx context.Context, req *Method1Request) (*google_protobuf.Empty, error) {
-	resp, err := c.client.Call(ctx, "ttrpc.example.v1.Example", "Method2", req)
-	if err != nil {
+	var resp google_protobuf.Empty
+	if err := c.client.Call(ctx, "ttrpc.example.v1.Example", "Method2", req, &resp); err != nil {
 		return nil, err
 	}
-	return resp.(*google_protobuf.Empty), nil
+	return &resp, nil
 }
 func (m *Method1Request) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)

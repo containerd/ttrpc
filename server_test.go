@@ -31,12 +31,8 @@ func newTestingClient(client *Client) *testingClient {
 }
 
 func (tc *testingClient) Test(ctx context.Context, req *testPayload) (*testPayload, error) {
-	resp, err := tc.client.Call(ctx, serviceName, "Test", req)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.(*testPayload), nil
+	var tp testPayload
+	return &tp, tc.client.Call(ctx, serviceName, "Test", req, &tp)
 }
 
 type testPayload struct {
@@ -72,17 +68,19 @@ func TestServer(t *testing.T) {
 
 	// more mocking of what is generated code. Unlike grpc, we register with a
 	// closure so that the descriptor is allocated only on registration.
-	registerTestingService := func(srv *Server, svc testingService) error {
-		return srv.Register(serviceName, map[string]Handler{
-			"Test": HandlerFunc(func(ctx context.Context, req interface{}) (interface{}, error) {
-				return svc.Test(ctx, req.(*testPayload))
-			}),
+	registerTestingService := func(srv *Server, svc testingService) {
+		srv.Register(serviceName, map[string]Method{
+			"Test": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
+				var req testPayload
+				if err := unmarshal(&req); err != nil {
+					return nil, err
+				}
+				return svc.Test(ctx, &req)
+			},
 		})
 	}
 
-	if err := registerTestingService(server, testImpl); err != nil {
-		t.Fatal(err)
-	}
+	registerTestingService(server, testImpl)
 
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {

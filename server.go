@@ -3,29 +3,22 @@ package ttrpc
 import (
 	"context"
 	"net"
-	"path"
 
-	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/log"
-	"github.com/containerd/typeurl"
-	"github.com/pkg/errors"
 )
 
 type Server struct {
-	handlers map[string]map[string]Handler
+	services *serviceSet
 }
 
 func NewServer() *Server {
-	return &Server{handlers: make(map[string]map[string]Handler)}
+	return &Server{
+		services: newServiceSet(),
+	}
 }
 
-func (s *Server) Register(name string, methods map[string]Handler) error {
-	if _, ok := s.handlers[name]; ok {
-		return errors.Errorf("duplicate service %v registered", name)
-	}
-
-	s.handlers[name] = methods
-	return nil
+func (s *Server) Register(name string, methods map[string]Method) {
+	s.services.register(name, methods)
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
@@ -70,10 +63,11 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 
-		resp, err := s.dispatch(ctx, &req)
-		if err != nil {
-			log.L.WithError(err).Error("failed to dispatch request")
-			return
+		p, status := s.services.call(ctx, req.Service, req.Method, req.Payload)
+
+		resp := &Response{
+			Status:  status.Proto(),
+			Payload: p,
 		}
 
 		if err := ch.send(ctx, resp); err != nil {
@@ -81,50 +75,4 @@ func (s *Server) handleConn(conn net.Conn) {
 			return
 		}
 	}
-}
-
-func (s *Server) dispatch(ctx context.Context, req *Request) (*Response, error) {
-	ctx = log.WithLogger(ctx, log.G(ctx).WithField("method", path.Join("/", req.Service, req.Method)))
-	handler, err := s.resolve(req.Service, req.Method)
-	if err != nil {
-		log.L.WithError(err).Error("failed to resolve handler")
-		return nil, err
-	}
-
-	payload, err := typeurl.UnmarshalAny(req.Payload)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := handler.Handle(ctx, payload)
-	if err != nil {
-		log.L.WithError(err).Error("handler returned an error")
-		return nil, err
-	}
-
-	apayload, err := typeurl.MarshalAny(resp)
-	if err != nil {
-		return nil, err
-	}
-
-	rresp := &Response{
-		// Status:  *st,
-		Payload: apayload,
-	}
-
-	return rresp, nil
-}
-
-func (s *Server) resolve(service, method string) (Handler, error) {
-	srv, ok := s.handlers[service]
-	if !ok {
-		return nil, errors.Wrapf(errdefs.ErrNotFound, "could not resolve service %v", service)
-	}
-
-	handler, ok := srv[method]
-	if !ok {
-		return nil, errors.Wrapf(errdefs.ErrNotFound, "could not resolve method %v", method)
-	}
-
-	return handler, nil
 }
