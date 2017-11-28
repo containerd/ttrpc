@@ -27,6 +27,7 @@ type Client struct {
 func NewClient(conn net.Conn) *Client {
 	c := &Client{
 		codec:        codec{},
+		requestID:    1,
 		channel:      newChannel(conn, conn),
 		sendRequests: make(chan sendRequest),
 		recvRequests: make(chan recvRequest),
@@ -44,7 +45,7 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 		return err
 	}
 
-	requestID := atomic.AddUint32(&c.requestID, 1)
+	requestID := atomic.AddUint32(&c.requestID, 2)
 	request := Request{
 		Service: service,
 		Method:  method,

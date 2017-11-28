@@ -5,6 +5,8 @@ import (
 	"net"
 
 	"github.com/containerd/containerd/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Server struct {
@@ -87,6 +89,24 @@ func (s *Server) handleConn(conn net.Conn) {
 			if err := s.codec.Unmarshal(p[:mh.Length], &req); err != nil {
 				recvErr <- err
 				return
+			}
+
+			if mh.StreamID%2 != 1 {
+				// enforce odd client initiated identifiers.
+				select {
+				case responses <- response{
+					// even though we've had an invalid stream id, we send it
+					// back on the same stream id so the client knows which
+					// stream id was bad.
+					id: mh.StreamID,
+					resp: &Response{
+						Status: status.New(codes.InvalidArgument, "StreamID must be odd for client initiated streams").Proto(),
+					},
+				}:
+				case <-done:
+				}
+
+				continue
 			}
 
 			select {
