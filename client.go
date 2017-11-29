@@ -40,22 +40,30 @@ func NewClient(conn net.Conn) *Client {
 }
 
 func (c *Client) Call(ctx context.Context, service, method string, req, resp interface{}) error {
+	requestID := atomic.AddUint32(&c.requestID, 2)
+	if err := c.sendRequest(ctx, requestID, service, method, req); err != nil {
+		return err
+	}
+
+	return c.recvResponse(ctx, requestID, resp)
+}
+
+func (c *Client) sendRequest(ctx context.Context, requestID uint32, service, method string, req interface{}) error {
 	payload, err := c.codec.Marshal(req)
 	if err != nil {
 		return err
 	}
 
-	requestID := atomic.AddUint32(&c.requestID, 2)
 	request := Request{
 		Service: service,
 		Method:  method,
 		Payload: payload,
 	}
 
-	if err := c.send(ctx, requestID, &request); err != nil {
-		return err
-	}
+	return c.send(ctx, requestID, &request)
+}
 
+func (c *Client) recvResponse(ctx context.Context, requestID uint32, resp interface{}) error {
 	var response Response
 	if err := c.recv(ctx, requestID, &response); err != nil {
 		return err
@@ -160,6 +168,10 @@ func (c *Client) run() {
 		// start one more goroutine to recv messages without blocking.
 		for {
 			var p [messageLengthMax]byte
+			// TODO(stevvooe): Something still isn't quite right with error
+			// handling on the client-side, causing EOFs to come through. We
+			// need other fixes in this changeset, so we'll address this
+			// correctly later.
 			mh, err := c.channel.recv(context.TODO(), p[:])
 			select {
 			case incoming <- received{
@@ -187,13 +199,12 @@ func (c *Client) run() {
 			}
 			waiters[req.id] = req
 		case r := <-incoming:
-			if r.err != nil {
-				c.err = r.err
-				return
-			}
-
 			if waiter, ok := waiters[r.mh.StreamID]; ok {
-				waiter.err <- proto.Unmarshal(r.p, waiter.msg.(proto.Message))
+				if r.err != nil {
+					waiter.err <- r.err
+				} else {
+					waiter.err <- proto.Unmarshal(r.p, waiter.msg.(proto.Message))
+				}
 			} else {
 				queued[r.mh.StreamID] = r
 			}
