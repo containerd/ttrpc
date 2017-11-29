@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const serviceName = "testService"
@@ -104,15 +106,34 @@ func TestServer(t *testing.T) {
 	}
 }
 
-func newTestClient(t *testing.T, addr string) (*Client, func()) {
-	conn, err := net.Dial("unix", addr)
-	if err != nil {
+func TestServerNotFound(t *testing.T) {
+	var (
+		ctx             = context.Background()
+		server          = NewServer()
+		addr, listener  = newTestListener(t)
+		errs            = make(chan error, 1)
+		client, cleanup = newTestClient(t, addr)
+	)
+	defer cleanup()
+	defer listener.Close()
+	go func() {
+		errs <- server.Serve(listener)
+	}()
+
+	var tp testPayload
+	if err := client.Call(ctx, "Not", "Found", &tp, &tp); err == nil {
+		t.Fatalf("expected error from non-existent service call")
+	} else if status, ok := status.FromError(err); !ok {
+		t.Fatalf("expected status present in error: %v", err)
+	} else if status.Code() != codes.NotFound {
+		t.Fatalf("expected not found for method")
+	}
+
+	if err := server.Shutdown(ctx); err != nil {
 		t.Fatal(err)
 	}
-	client := NewClient(conn)
-	return client, func() {
-		conn.Close()
-		client.Close()
+	if err := <-errs; err != ErrServerClosed {
+		t.Fatal(err)
 	}
 }
 
@@ -261,6 +282,18 @@ func roundTrip(ctx context.Context, t *testing.T, client *testingClient, value s
 		input:    tp,
 		expected: &testPayload{Foo: strings.Repeat(tp.Foo, 2)},
 		received: resp,
+	}
+}
+
+func newTestClient(t *testing.T, addr string) (*Client, func()) {
+	conn, err := net.Dial("unix", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := NewClient(conn)
+	return client, func() {
+		conn.Close()
+		client.Close()
 	}
 }
 
