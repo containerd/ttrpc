@@ -50,7 +50,7 @@ func TestReadWriteMessage(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(received, messages) {
-		t.Fatal("didn't received expected set of messages: %v != %v", received, messages)
+		t.Fatalf("didn't received expected set of messages: %v != %v", received, messages)
 	}
 }
 
