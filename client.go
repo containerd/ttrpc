@@ -167,12 +167,11 @@ func (c *Client) run() {
 	go func() {
 		// start one more goroutine to recv messages without blocking.
 		for {
-			var p [messageLengthMax]byte
 			// TODO(stevvooe): Something still isn't quite right with error
 			// handling on the client-side, causing EOFs to come through. We
 			// need other fixes in this changeset, so we'll address this
 			// correctly later.
-			mh, err := c.channel.recv(context.TODO(), p[:])
+			mh, p, err := c.channel.recv(context.TODO())
 			select {
 			case incoming <- received{
 				mh:  mh,
@@ -204,6 +203,7 @@ func (c *Client) run() {
 					waiter.err <- r.err
 				} else {
 					waiter.err <- proto.Unmarshal(r.p, waiter.msg.(proto.Message))
+					c.channel.putmbuf(r.p)
 				}
 			} else {
 				queued[r.mh.StreamID] = r
