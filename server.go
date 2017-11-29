@@ -275,7 +275,25 @@ func (c *serverConn) run(sctx context.Context) {
 
 	go func(recvErr chan error) {
 		defer close(recvErr)
-		var p [messageLengthMax]byte
+		sendImmediate := func(id uint32, st *status.Status) bool {
+			select {
+			case responses <- response{
+				// even though we've had an invalid stream id, we send it
+				// back on the same stream id so the client knows which
+				// stream id was bad.
+				id: id,
+				resp: &Response{
+					Status: st.Proto(),
+				},
+			}:
+				return true
+			case <-c.shutdown:
+				return false
+			case <-done:
+				return false
+			}
+		}
+
 		for {
 			select {
 			case <-c.shutdown:
@@ -285,10 +303,21 @@ func (c *serverConn) run(sctx context.Context) {
 			default: // proceed
 			}
 
-			mh, err := ch.recv(ctx, p[:])
+			mh, p, err := ch.recv(ctx)
 			if err != nil {
-				recvErr <- err
-				return
+				status, ok := status.FromError(err)
+				if !ok {
+					recvErr <- err
+					return
+				}
+
+				// in this case, we send an error for that particular message
+				// when the status is defined.
+				if !sendImmediate(mh.StreamID, status) {
+					return
+				}
+
+				continue
 			}
 
 			if mh.Type != messageTypeRequest {
@@ -296,28 +325,9 @@ func (c *serverConn) run(sctx context.Context) {
 				continue
 			}
 
-			sendImmediate := func(code codes.Code, msg string, args ...interface{}) bool {
-				select {
-				case responses <- response{
-					// even though we've had an invalid stream id, we send it
-					// back on the same stream id so the client knows which
-					// stream id was bad.
-					id: mh.StreamID,
-					resp: &Response{
-						Status: status.Newf(code, msg, args...).Proto(),
-					},
-				}:
-					return true
-				case <-c.shutdown:
-					return false
-				case <-done:
-					return false
-				}
-			}
-
 			var req Request
-			if err := c.server.codec.Unmarshal(p[:mh.Length], &req); err != nil {
-				if !sendImmediate(codes.InvalidArgument, "unmarshal request error: %v", err) {
+			if err := c.server.codec.Unmarshal(p, &req); err != nil {
+				if !sendImmediate(mh.StreamID, status.Newf(codes.InvalidArgument, "unmarshal request error: %v", err)) {
 					return
 				}
 				continue
@@ -325,7 +335,7 @@ func (c *serverConn) run(sctx context.Context) {
 
 			if mh.StreamID%2 != 1 {
 				// enforce odd client initiated identifiers.
-				if !sendImmediate(codes.InvalidArgument, "StreamID must be odd for client initiated streams") {
+				if !sendImmediate(mh.StreamID, status.Newf(codes.InvalidArgument, "StreamID must be odd for client initiated streams")) {
 					return
 				}
 				continue

@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestReadWriteMessage(t *testing.T) {
@@ -37,8 +39,7 @@ func TestReadWriteMessage(t *testing.T) {
 	)
 
 	for {
-		var p [4096]byte
-		mh, err := rch.recv(ctx, p[:])
+		_, p, err := rch.recv(ctx)
 		if err != nil {
 			if errors.Cause(err) != io.EOF {
 				t.Fatal(err)
@@ -46,7 +47,7 @@ func TestReadWriteMessage(t *testing.T) {
 
 			break
 		}
-		received = append(received, p[:mh.Length])
+		received = append(received, p)
 	}
 
 	if !reflect.DeepEqual(received, messages) {
@@ -54,13 +55,13 @@ func TestReadWriteMessage(t *testing.T) {
 	}
 }
 
-func TestSmallBuffer(t *testing.T) {
+func TestMessageOversize(t *testing.T) {
 	var (
 		ctx    = context.Background()
 		buffer bytes.Buffer
 		w      = bufio.NewWriter(&buffer)
 		ch     = newChannel(w, nil)
-		msg    = []byte("a message of massive length")
+		msg    = bytes.Repeat([]byte("a message of massive length"), 512<<10)
 	)
 
 	if err := ch.send(ctx, 1, 1, msg); err != nil {
@@ -69,17 +70,21 @@ func TestSmallBuffer(t *testing.T) {
 
 	// now, read it off the channel with a small buffer
 	var (
-		p   = make([]byte, len(msg)-1)
 		r   = bufio.NewReader(bytes.NewReader(buffer.Bytes()))
 		rch = newChannel(nil, r)
 	)
 
-	_, err := rch.recv(ctx, p[:])
+	_, _, err := rch.recv(ctx)
 	if err == nil {
 		t.Fatalf("error expected reading with small buffer")
 	}
 
-	if errors.Cause(err) != io.ErrShortBuffer {
-		t.Fatalf("errors.Cause(err) should equal io.ErrShortBuffer: %v != %v", err, io.ErrShortBuffer)
+	status, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected grpc status error: %v", err)
+	}
+
+	if status.Code() != codes.ResourceExhausted {
+		t.Fatalf("expected grpc status code: %v != %v", status.Code(), codes.ResourceExhausted)
 	}
 }

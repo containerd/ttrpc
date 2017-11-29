@@ -246,6 +246,41 @@ func TestServerClose(t *testing.T) {
 	checkServerShutdown(t, server)
 }
 
+func TestOversizeCall(t *testing.T) {
+	var (
+		ctx             = context.Background()
+		server          = NewServer()
+		addr, listener  = newTestListener(t)
+		errs            = make(chan error, 1)
+		client, cleanup = newTestClient(t, addr)
+	)
+	defer cleanup()
+	defer listener.Close()
+	go func() {
+		errs <- server.Serve(listener)
+	}()
+
+	registerTestingService(server, &testingServer{})
+
+	tp := &testPayload{
+		Foo: strings.Repeat("a", 1+messageLengthMax),
+	}
+	if err := client.Call(ctx, serviceName, "Test", tp, tp); err == nil {
+		t.Fatalf("expected error from non-existent service call")
+	} else if status, ok := status.FromError(err); !ok {
+		t.Fatalf("expected status present in error: %v", err)
+	} else if status.Code() != codes.ResourceExhausted {
+		t.Fatalf("expected code: %v != %v", status.Code(), codes.ResourceExhausted)
+	}
+
+	if err := server.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errs; err != ErrServerClosed {
+		t.Fatal(err)
+	}
+}
+
 func checkServerShutdown(t *testing.T, server *Server) {
 	t.Helper()
 	server.mu.Lock()
