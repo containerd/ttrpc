@@ -110,8 +110,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		case <-ticker.C:
 		}
 	}
-
-	return lnerr
 }
 
 // Close the server without waiting for active connections.
@@ -373,7 +371,6 @@ func (c *serverConn) run(sctx context.Context) {
 		select {
 		case request := <-requests:
 			active++
-
 			go func(id uint32) {
 				p, status := c.server.services.call(ctx, request.req.Service, request.req.Method, request.req.Payload)
 				resp := &Response{
@@ -395,6 +392,7 @@ func (c *serverConn) run(sctx context.Context) {
 				log.L.WithError(err).Error("failed marshaling response")
 				return
 			}
+
 			if err := ch.send(ctx, response.id, messageTypeResponse, p); err != nil {
 				log.L.WithError(err).Error("failed sending message on channel")
 				return

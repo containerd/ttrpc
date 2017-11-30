@@ -6,8 +6,8 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"google.golang.org/grpc/codes"
@@ -159,19 +159,25 @@ func TestServerListenerClosed(t *testing.T) {
 }
 
 func TestServerShutdown(t *testing.T) {
+	const ncalls = 5
 	var (
-		ctx              = context.Background()
-		server           = NewServer()
-		addr, listener   = newTestListener(t)
-		shutdownStarted  = make(chan struct{})
-		shutdownFinished = make(chan struct{})
-		errs             = make(chan error, 1)
-		client, cleanup  = newTestClient(t, addr)
-		_, cleanup2      = newTestClient(t, addr) // secondary connection
+		ctx                      = context.Background()
+		server                   = NewServer()
+		addr, listener           = newTestListener(t)
+		shutdownStarted          = make(chan struct{})
+		shutdownFinished         = make(chan struct{})
+		handlersStarted          = make(chan struct{})
+		handlersStartedCloseOnce sync.Once
+		proceed                  = make(chan struct{})
+		serveErrs                = make(chan error, 1)
+		callwg                   sync.WaitGroup
+		callErrs                 = make(chan error, ncalls)
+		shutdownErrs             = make(chan error, 1)
+		client, cleanup          = newTestClient(t, addr)
+		_, cleanup2              = newTestClient(t, addr) // secondary connection
 	)
 	defer cleanup()
 	defer cleanup2()
-	defer server.Close()
 
 	// register a service that takes until we tell it to stop
 	server.Register(serviceName, map[string]Method{
@@ -180,43 +186,52 @@ func TestServerShutdown(t *testing.T) {
 			if err := unmarshal(&req); err != nil {
 				return nil, err
 			}
+
+			handlersStartedCloseOnce.Do(func() { close(handlersStarted) })
+			<-proceed
 			return &testPayload{Foo: "waited"}, nil
 		},
 	})
 
 	go func() {
-		errs <- server.Serve(listener)
+		serveErrs <- server.Serve(listener)
 	}()
 
-	tp := testPayload{Foo: "half"}
-	// send a few half requests
-	if err := client.sendRequest(ctx, 1, "testService", "Test", &tp); err != nil {
-		t.Fatal(err)
-	}
-	if err := client.sendRequest(ctx, 3, "testService", "Test", &tp); err != nil {
-		t.Fatal(err)
+	// send a series of requests that will get blocked
+	for i := 0; i < 5; i++ {
+		callwg.Add(1)
+		go func(i int) {
+			callwg.Done()
+			tp := testPayload{Foo: "half" + fmt.Sprint(i)}
+			callErrs <- client.Call(ctx, serviceName, "Test", &tp, &tp)
+		}(i)
 	}
 
-	time.Sleep(1 * time.Millisecond) // ensure that requests make it through before shutdown
+	<-handlersStarted
 	go func() {
 		close(shutdownStarted)
-		server.Shutdown(ctx)
+		shutdownErrs <- server.Shutdown(ctx)
 		// server.Close()
 		close(shutdownFinished)
 	}()
 
 	<-shutdownStarted
-
-	// receive the responses
-	if err := client.recvResponse(ctx, 1, &tp); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := client.recvResponse(ctx, 3, &tp); err != nil {
-		t.Fatal(err)
-	}
-
+	close(proceed)
 	<-shutdownFinished
+
+	for i := 0; i < ncalls; i++ {
+		if err := <-callErrs; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := <-shutdownErrs; err != nil {
+		t.Fatal(err)
+	}
+
+	if err := <-serveErrs; err != ErrServerClosed {
+		t.Fatal(err)
+	}
 	checkServerShutdown(t, server)
 }
 
@@ -278,6 +293,42 @@ func TestOversizeCall(t *testing.T) {
 	}
 	if err := <-errs; err != ErrServerClosed {
 		t.Fatal(err)
+	}
+}
+
+func TestClientEOF(t *testing.T) {
+	var (
+		ctx             = context.Background()
+		server          = NewServer()
+		addr, listener  = newTestListener(t)
+		errs            = make(chan error, 1)
+		client, cleanup = newTestClient(t, addr)
+	)
+	defer cleanup()
+	defer listener.Close()
+	go func() {
+		errs <- server.Serve(listener)
+	}()
+
+	registerTestingService(server, &testingServer{})
+
+	tp := &testPayload{}
+	// do a regular call
+	if err := client.Call(ctx, serviceName, "Test", tp, tp); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// shutdown the server so the client stops receiving stuff.
+	if err := server.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errs; err != ErrServerClosed {
+		t.Fatal(err)
+	}
+
+	// server shutdown, but we still make a call.
+	if err := client.Call(ctx, serviceName, "Test", tp, tp); err == nil {
+		t.Fatalf("expected error when calling against shutdown server")
 	}
 }
 
