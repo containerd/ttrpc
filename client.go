@@ -206,5 +206,6 @@ func (c *Client) recv(resp *Response, msg *message) error {
 		return errors.New("unkown message type received")
 	}
 
+	defer c.channel.putmbuf(msg.p)
 	return proto.Unmarshal(msg.p, resp)
 }

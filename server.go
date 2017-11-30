@@ -325,11 +325,13 @@ func (c *serverConn) run(sctx context.Context) {
 
 			var req Request
 			if err := c.server.codec.Unmarshal(p, &req); err != nil {
+				ch.putmbuf(p)
 				if !sendImmediate(mh.StreamID, status.Newf(codes.InvalidArgument, "unmarshal request error: %v", err)) {
 					return
 				}
 				continue
 			}
+			ch.putmbuf(p)
 
 			if mh.StreamID%2 != 1 {
 				// enforce odd client initiated identifiers.
