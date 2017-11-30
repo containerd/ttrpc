@@ -78,7 +78,7 @@ func init() {
 func TestServer(t *testing.T) {
 	var (
 		ctx             = context.Background()
-		server          = NewServer()
+		server          = mustServer(t)(NewServer())
 		testImpl        = &testingServer{}
 		addr, listener  = newTestListener(t)
 		client, cleanup = newTestClient(t, addr)
@@ -109,7 +109,7 @@ func TestServer(t *testing.T) {
 func BenchmarkRoundTrip(b *testing.B) {
 	var (
 		ctx             = context.Background()
-		server          = NewServer()
+		server          = mustServer(b)(NewServer())
 		testImpl        = &testingServer{}
 		addr, listener  = newTestListener(b)
 		client, cleanup = newTestClient(b, addr)
@@ -137,7 +137,7 @@ func BenchmarkRoundTrip(b *testing.B) {
 func TestServerNotFound(t *testing.T) {
 	var (
 		ctx             = context.Background()
-		server          = NewServer()
+		server          = mustServer(t)(NewServer())
 		addr, listener  = newTestListener(t)
 		errs            = make(chan error, 1)
 		client, cleanup = newTestClient(t, addr)
@@ -167,7 +167,7 @@ func TestServerNotFound(t *testing.T) {
 
 func TestServerListenerClosed(t *testing.T) {
 	var (
-		server      = NewServer()
+		server      = mustServer(t)(NewServer())
 		_, listener = newTestListener(t)
 		errs        = make(chan error, 1)
 	)
@@ -190,7 +190,7 @@ func TestServerShutdown(t *testing.T) {
 	const ncalls = 5
 	var (
 		ctx                      = context.Background()
-		server                   = NewServer()
+		server                   = mustServer(t)(NewServer())
 		addr, listener           = newTestListener(t)
 		shutdownStarted          = make(chan struct{})
 		shutdownFinished         = make(chan struct{})
@@ -265,7 +265,7 @@ func TestServerShutdown(t *testing.T) {
 
 func TestServerClose(t *testing.T) {
 	var (
-		server      = NewServer()
+		server      = mustServer(t)(NewServer())
 		_, listener = newTestListener(t)
 		startClose  = make(chan struct{})
 		errs        = make(chan error, 1)
@@ -292,7 +292,7 @@ func TestServerClose(t *testing.T) {
 func TestOversizeCall(t *testing.T) {
 	var (
 		ctx             = context.Background()
-		server          = NewServer()
+		server          = mustServer(t)(NewServer())
 		addr, listener  = newTestListener(t)
 		errs            = make(chan error, 1)
 		client, cleanup = newTestClient(t, addr)
@@ -327,7 +327,7 @@ func TestOversizeCall(t *testing.T) {
 func TestClientEOF(t *testing.T) {
 	var (
 		ctx             = context.Background()
-		server          = NewServer()
+		server          = mustServer(t)(NewServer())
 		addr, listener  = newTestListener(t)
 		errs            = make(chan error, 1)
 		client, cleanup = newTestClient(t, addr)
@@ -357,6 +357,29 @@ func TestClientEOF(t *testing.T) {
 	// server shutdown, but we still make a call.
 	if err := client.Call(ctx, serviceName, "Test", tp, tp); err == nil {
 		t.Fatalf("expected error when calling against shutdown server")
+	}
+}
+
+func TestUnixSocketHandshake(t *testing.T) {
+	var (
+		ctx             = context.Background()
+		server          = mustServer(t)(NewServer(WithServerHandshaker(UnixSocketRequireSameUser)))
+		addr, listener  = newTestListener(t)
+		errs            = make(chan error, 1)
+		client, cleanup = newTestClient(t, addr)
+	)
+	defer cleanup()
+	defer listener.Close()
+	go func() {
+		errs <- server.Serve(listener)
+	}()
+
+	registerTestingService(server, &testingServer{})
+
+	var tp testPayload
+	// server shutdown, but we still make a call.
+	if err := client.Call(ctx, serviceName, "Test", &tp, &tp); err != nil {
+		t.Fatalf("unexpected error making call: %v", err)
 	}
 }
 
@@ -419,4 +442,15 @@ func newTestListener(t testing.TB) (string, net.Listener) {
 	}
 
 	return addr, listener
+}
+
+func mustServer(t testing.TB) func(server *Server, err error) *Server {
+	return func(server *Server, err error) *Server {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return server
+	}
 }

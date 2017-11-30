@@ -19,6 +19,7 @@ var (
 )
 
 type Server struct {
+	config   *serverConfig
 	services *serviceSet
 	codec    codec
 
@@ -28,13 +29,21 @@ type Server struct {
 	done        chan struct{}            // marks point at which we stop serving requests
 }
 
-func NewServer() *Server {
+func NewServer(opts ...ServerOpt) (*Server, error) {
+	config := &serverConfig{}
+	for _, opt := range opts {
+		if err := opt(config); err != nil {
+			return nil, err
+		}
+	}
+
 	return &Server{
+		config:      config,
 		services:    newServiceSet(),
 		done:        make(chan struct{}),
 		listeners:   make(map[net.Listener]struct{}),
 		connections: make(map[*serverConn]struct{}),
-	}
+	}, nil
 }
 
 func (s *Server) Register(name string, methods map[string]Method) {
@@ -82,7 +91,15 @@ func (s *Server) Serve(l net.Listener) error {
 		}
 
 		backoff = 0
-		sc := s.newConn(conn)
+
+		approved, handshake, err := s.handshake(ctx, conn)
+		if err != nil {
+			log.L.WithError(err).Errorf("ttrpc: refusing connection after handshake")
+			conn.Close()
+			continue
+		}
+
+		sc := s.newConn(approved, handshake)
 		go sc.run(ctx)
 	}
 }
@@ -131,6 +148,14 @@ func (s *Server) Close() error {
 	}
 
 	return err
+}
+
+func (s *Server) handshake(ctx context.Context, conn net.Conn) (net.Conn, interface{}, error) {
+	if s.config.handshaker == nil {
+		return conn, nil, nil
+	}
+
+	return s.config.handshaker.Handshake(ctx, conn)
 }
 
 func (s *Server) addListener(l net.Listener) {
@@ -205,11 +230,12 @@ func (cs connState) String() string {
 	}
 }
 
-func (s *Server) newConn(conn net.Conn) *serverConn {
+func (s *Server) newConn(conn net.Conn, handshake interface{}) *serverConn {
 	c := &serverConn{
-		server:   s,
-		conn:     conn,
-		shutdown: make(chan struct{}),
+		server:    s,
+		conn:      conn,
+		handshake: handshake,
+		shutdown:  make(chan struct{}),
 	}
 	c.setState(connStateIdle)
 	s.addConnection(c)
@@ -217,9 +243,10 @@ func (s *Server) newConn(conn net.Conn) *serverConn {
 }
 
 type serverConn struct {
-	server *Server
-	conn   net.Conn
-	state  atomic.Value
+	server    *Server
+	conn      net.Conn
+	handshake interface{} // data from handshake, not used for now
+	state     atomic.Value
 
 	shutdownOnce sync.Once
 	shutdown     chan struct{} // forced shutdown, used by close
