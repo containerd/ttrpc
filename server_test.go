@@ -106,6 +106,34 @@ func TestServer(t *testing.T) {
 	}
 }
 
+func BenchmarkRoundTrip(b *testing.B) {
+	var (
+		ctx             = context.Background()
+		server          = NewServer()
+		testImpl        = &testingServer{}
+		addr, listener  = newTestListener(b)
+		client, cleanup = newTestClient(b, addr)
+		tclient         = newTestingClient(client)
+	)
+
+	defer listener.Close()
+	defer cleanup()
+
+	registerTestingService(server, testImpl)
+
+	go server.Serve(listener)
+	defer server.Shutdown(ctx)
+
+	var tp testPayload
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if _, err := tclient.Test(ctx, &tp); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestServerNotFound(t *testing.T) {
 	var (
 		ctx             = context.Background()
@@ -371,7 +399,7 @@ func roundTrip(ctx context.Context, t *testing.T, client *testingClient, value s
 	}
 }
 
-func newTestClient(t *testing.T, addr string) (*Client, func()) {
+func newTestClient(t testing.TB, addr string) (*Client, func()) {
 	conn, err := net.Dial("unix", addr)
 	if err != nil {
 		t.Fatal(err)
@@ -383,7 +411,7 @@ func newTestClient(t *testing.T, addr string) (*Client, func()) {
 	}
 }
 
-func newTestListener(t *testing.T) (string, net.Listener) {
+func newTestListener(t testing.TB) (string, net.Listener) {
 	addr := "\x00" + t.Name()
 	listener, err := net.Listen("unix", addr)
 	if err != nil {
