@@ -20,17 +20,21 @@ func (fn UnixCredentialsFunc) Handshake(ctx context.Context, conn net.Conn) (net
 		return nil, nil, errors.Wrap(err, "ttrpc.UnixCredentialsFunc: require unix socket")
 	}
 
-	// TODO(stevvooe): Calling (*UnixConn).File causes a 5x performance
-	// decrease vs just accessing the fd directly. Need to do some more
-	// troubleshooting to isolate this to Go runtime or kernel.
-	fp, err := uc.File()
+	rs, err := uc.SyscallConn()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "ttrpc.UnixCredentialsFunc: failed to get unix file")
+		return nil, nil, errors.Wrap(err, "ttrpc.UnixCredentialsFunc: (net.UnixConn).SyscallConn failed")
 	}
-	defer fp.Close() // this gets duped and must be closed when this method is complete.
+	var (
+		ucred    *unix.Ucred
+		ucredErr error
+	)
+	if err := rs.Control(func(fd uintptr) {
+		ucred, ucredErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+	}); err != nil {
+		return nil, nil, errors.Wrapf(err, "ttrpc.UnixCredentialsFunc: (*syscall.RawConn).Control failed")
+	}
 
-	ucred, err := unix.GetsockoptUcred(int(fp.Fd()), unix.SOL_SOCKET, unix.SO_PEERCRED)
-	if err != nil {
+	if ucredErr != nil {
 		return nil, nil, errors.Wrapf(err, "ttrpc.UnixCredentialsFunc: failed to retrieve socket peer credentials")
 	}
 
