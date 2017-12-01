@@ -43,6 +43,14 @@ func (fn UnixCredentialsFunc) Handshake(ctx context.Context, conn net.Conn) (net
 	return uc, ucred, nil
 }
 
+// UnixSocketRequireUidGid requires specific *effective* UID/GID, rather than the real UID/GID.
+//
+// For example, if a daemon binary is owned by the root (UID 0) with SUID bit but running as an
+// unprivileged user (UID 1001), the effective UID becomes 0, and the real UID becomes 1001.
+// So calling this function with uid=0 allows a connection from effective UID 0 but rejects
+// a connection from effective UID 1001.
+//
+// See socket(7), SO_PEERCRED: "The returned credentials are those that were in effect at the time of the call to connect(2) or socketpair(2)."
 func UnixSocketRequireUidGid(uid, gid int) UnixCredentialsFunc {
 	return func(ucred *unix.Ucred) error {
 		return requireUidGid(ucred, uid, gid)
@@ -53,14 +61,14 @@ func UnixSocketRequireRoot() UnixCredentialsFunc {
 	return UnixSocketRequireUidGid(0, 0)
 }
 
-// UnixSocketRequireSameUser resolves the current unix user and returns a
+// UnixSocketRequireSameUser resolves the current effective unix user and returns a
 // UnixCredentialsFunc that will validate incoming unix connections against the
 // current credentials.
 //
 // This is useful when using abstract sockets that are accessible by all users.
 func UnixSocketRequireSameUser() UnixCredentialsFunc {
-	uid, gid := os.Getuid(), os.Getgid()
-	return UnixSocketRequireUidGid(uid, gid)
+	euid, egid := os.Geteuid(), os.Getegid()
+	return UnixSocketRequireUidGid(euid, egid)
 }
 
 func requireRoot(ucred *unix.Ucred) error {
