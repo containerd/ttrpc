@@ -106,34 +106,6 @@ func TestServer(t *testing.T) {
 	}
 }
 
-func BenchmarkRoundTrip(b *testing.B) {
-	var (
-		ctx             = context.Background()
-		server          = mustServer(b)(NewServer())
-		testImpl        = &testingServer{}
-		addr, listener  = newTestListener(b)
-		client, cleanup = newTestClient(b, addr)
-		tclient         = newTestingClient(client)
-	)
-
-	defer listener.Close()
-	defer cleanup()
-
-	registerTestingService(server, testImpl)
-
-	go server.Serve(listener)
-	defer server.Shutdown(ctx)
-
-	var tp testPayload
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		if _, err := tclient.Test(ctx, &tp); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func TestServerNotFound(t *testing.T) {
 	var (
 		ctx             = context.Background()
@@ -363,7 +335,7 @@ func TestClientEOF(t *testing.T) {
 func TestUnixSocketHandshake(t *testing.T) {
 	var (
 		ctx             = context.Background()
-		server          = mustServer(t)(NewServer(WithServerHandshaker(UnixSocketRequireSameUser)))
+		server          = mustServer(t)(NewServer(WithServerHandshaker(UnixSocketRequireSameUser())))
 		addr, listener  = newTestListener(t)
 		errs            = make(chan error, 1)
 		client, cleanup = newTestClient(t, addr)
@@ -380,6 +352,66 @@ func TestUnixSocketHandshake(t *testing.T) {
 	// server shutdown, but we still make a call.
 	if err := client.Call(ctx, serviceName, "Test", &tp, &tp); err != nil {
 		t.Fatalf("unexpected error making call: %v", err)
+	}
+}
+
+func BenchmarkRoundTrip(b *testing.B) {
+	var (
+		ctx             = context.Background()
+		server          = mustServer(b)(NewServer())
+		testImpl        = &testingServer{}
+		addr, listener  = newTestListener(b)
+		client, cleanup = newTestClient(b, addr)
+		tclient         = newTestingClient(client)
+	)
+
+	defer listener.Close()
+	defer cleanup()
+
+	registerTestingService(server, testImpl)
+
+	go server.Serve(listener)
+	defer server.Shutdown(ctx)
+
+	var tp testPayload
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if _, err := tclient.Test(ctx, &tp); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkRoundTripUnixSocketCreds(b *testing.B) {
+	// TODO(stevvooe): Right now, there is a 5x performance decrease when using
+	// unix socket credentials. See (UnixCredentialsFunc).Handshake for
+	// details.
+
+	var (
+		ctx             = context.Background()
+		server          = mustServer(b)(NewServer(WithServerHandshaker(UnixSocketRequireSameUser())))
+		testImpl        = &testingServer{}
+		addr, listener  = newTestListener(b)
+		client, cleanup = newTestClient(b, addr)
+		tclient         = newTestingClient(client)
+	)
+
+	defer listener.Close()
+	defer cleanup()
+
+	registerTestingService(server, testImpl)
+
+	go server.Serve(listener)
+	defer server.Shutdown(ctx)
+
+	var tp testPayload
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if _, err := tclient.Test(ctx, &tp); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

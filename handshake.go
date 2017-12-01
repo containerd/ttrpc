@@ -22,3 +22,13 @@ type Handshaker interface {
 	// client-side.
 	Handshake(ctx context.Context, conn net.Conn) (net.Conn, interface{}, error)
 }
+
+type handshakerFunc func(ctx context.Context, conn net.Conn) (net.Conn, interface{}, error)
+
+func (fn handshakerFunc) Handshake(ctx context.Context, conn net.Conn) (net.Conn, interface{}, error) {
+	return fn(ctx, conn)
+}
+
+func noopHandshake(ctx context.Context, conn net.Conn) (net.Conn, interface{}, error) {
+	return conn, nil, nil
+}

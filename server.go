@@ -2,6 +2,7 @@ package ttrpc
 
 import (
 	"context"
+	"io"
 	"math/rand"
 	"net"
 	"sync"
@@ -55,9 +56,14 @@ func (s *Server) Serve(l net.Listener) error {
 	defer s.closeListener(l)
 
 	var (
-		ctx     = context.Background()
-		backoff time.Duration
+		ctx        = context.Background()
+		backoff    time.Duration
+		handshaker = s.config.handshaker
 	)
+
+	if handshaker == nil {
+		handshaker = handshakerFunc(noopHandshake)
+	}
 
 	for {
 		conn, err := l.Accept()
@@ -92,7 +98,7 @@ func (s *Server) Serve(l net.Listener) error {
 
 		backoff = 0
 
-		approved, handshake, err := s.handshake(ctx, conn)
+		approved, handshake, err := handshaker.Handshake(ctx, conn)
 		if err != nil {
 			log.L.WithError(err).Errorf("ttrpc: refusing connection after handshake")
 			conn.Close()
@@ -148,14 +154,6 @@ func (s *Server) Close() error {
 	}
 
 	return err
-}
-
-func (s *Server) handshake(ctx context.Context, conn net.Conn) (net.Conn, interface{}, error) {
-	if s.config.handshaker == nil {
-		return conn, nil, nil
-	}
-
-	return s.config.handshaker.Handshake(ctx, conn)
 }
 
 func (s *Server) addListener(l net.Listener) {
@@ -433,7 +431,7 @@ func (c *serverConn) run(sctx context.Context) {
 			// branch. Basically, it means that we are no longer receiving
 			// requests due to a terminal error.
 			recvErr = nil // connection is now "closing"
-			if err != nil {
+			if err != nil && err != io.EOF {
 				log.L.WithError(err).Error("error receiving message")
 			}
 		case <-shutdown:
