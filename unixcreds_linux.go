@@ -1,5 +1,3 @@
-// +build linux freebsd solaris
-
 package ttrpc
 
 import (
