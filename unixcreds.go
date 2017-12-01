@@ -5,17 +5,11 @@ package ttrpc
 import (
 	"context"
 	"net"
-	"os/user"
-	"strconv"
+	"os"
 	"syscall"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
-)
-
-var (
-	UnixSocketRequireSameUser = UnixCredentialsFunc(requireSameUser)
-	UnixSocketRequireRoot     = UnixCredentialsFunc(requireRoot)
 )
 
 type UnixCredentialsFunc func(*unix.Ucred) error
@@ -26,6 +20,9 @@ func (fn UnixCredentialsFunc) Handshake(ctx context.Context, conn net.Conn) (net
 		return nil, nil, errors.Wrap(err, "ttrpc.UnixCredentialsFunc: require unix socket")
 	}
 
+	// TODO(stevvooe): Calling (*UnixConn).File causes a 5x performance
+	// decrease vs just accessing the fd directly. Need to do some more
+	// troubleshooting to isolate this to Go runtime or kernel.
 	fp, err := uc.File()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "ttrpc.UnixCredentialsFunc: failed to get unix file")
@@ -44,37 +41,32 @@ func (fn UnixCredentialsFunc) Handshake(ctx context.Context, conn net.Conn) (net
 	return uc, ucred, nil
 }
 
-func UnixSocketRequireUidGid(uid, gid uint32) UnixCredentialsFunc {
+func UnixSocketRequireUidGid(uid, gid int) UnixCredentialsFunc {
 	return func(ucred *unix.Ucred) error {
 		return requireUidGid(ucred, uid, gid)
 	}
+}
+
+func UnixSocketRequireRoot() UnixCredentialsFunc {
+	return UnixSocketRequireUidGid(0, 0)
+}
+
+// UnixSocketRequireSameUser resolves the current unix user and returns a
+// UnixCredentialsFunc that will validate incoming unix connections against the
+// current credentials.
+//
+// This is useful when using abstract sockets that are accessible by all users.
+func UnixSocketRequireSameUser() UnixCredentialsFunc {
+	uid, gid := os.Getuid(), os.Getgid()
+	return UnixSocketRequireUidGid(uid, gid)
 }
 
 func requireRoot(ucred *unix.Ucred) error {
 	return requireUidGid(ucred, 0, 0)
 }
 
-func requireSameUser(ucred *unix.Ucred) error {
-	u, err := user.Current()
-	if err != nil {
-		return errors.Wrapf(err, "could not resolve current user")
-	}
-
-	uid, err := strconv.ParseUint(u.Uid, 10, 32)
-	if err != nil {
-		return errors.Wrapf(err, "failed to parse current user uid: %v", u.Uid)
-	}
-
-	gid, err := strconv.ParseUint(u.Gid, 10, 32)
-	if err != nil {
-		return errors.Wrapf(err, "failed to parse current user gid: %v", u.Gid)
-	}
-
-	return requireUidGid(ucred, uint32(uid), uint32(gid))
-}
-
-func requireUidGid(ucred *unix.Ucred, uid, gid uint32) error {
-	if (uid != ucred.Uid) || (gid != ucred.Gid) {
+func requireUidGid(ucred *unix.Ucred, uid, gid int) error {
+	if (uid != -1 && uint32(uid) != ucred.Uid) || (gid != -1 && uint32(gid) != ucred.Gid) {
 		return errors.Wrap(syscall.EPERM, "ttrpc: invalid credentials")
 	}
 	return nil
