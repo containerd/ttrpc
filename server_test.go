@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -220,7 +221,7 @@ func TestServerShutdown(t *testing.T) {
 	<-shutdownFinished
 
 	for i := 0; i < ncalls; i++ {
-		if err := <-callErrs; err != nil {
+		if err := <-callErrs; err != nil && err != ErrClosed {
 			t.Fatal(err)
 		}
 	}
@@ -329,6 +330,8 @@ func TestClientEOF(t *testing.T) {
 	// server shutdown, but we still make a call.
 	if err := client.Call(ctx, serviceName, "Test", tp, tp); err == nil {
 		t.Fatalf("expected error when calling against shutdown server")
+	} else if errors.Cause(err) != ErrClosed {
+		t.Fatalf("expected to have a cause of ErrClosed, got %v", errors.Cause(err))
 	}
 }
 
