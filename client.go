@@ -35,7 +35,7 @@ func NewClient(conn net.Conn) *Client {
 	c := &Client{
 		codec:   codec{},
 		conn:    conn,
-		channel: newChannel(conn, conn),
+		channel: newChannel(conn),
 		calls:   make(chan *callRequest),
 		closed:  make(chan struct{}),
 		done:    make(chan struct{}),
