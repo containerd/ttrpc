@@ -199,7 +199,7 @@ func (c *Client) run() {
 			}
 			// broadcast the shutdown error to the remaining waiters.
 			for _, waiter := range waiters {
-				waiter.errs <- shutdownErr
+				waiter.errs <- c.err
 			}
 			return
 		}
