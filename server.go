@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/containerd/containerd/log"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -88,7 +88,7 @@ func (s *Server) Serve(l net.Listener) error {
 				}
 
 				sleep := time.Duration(rand.Int63n(int64(backoff)))
-				log.L.WithError(err).Errorf("ttrpc: failed accept; backoff %v", sleep)
+				logrus.WithError(err).Errorf("ttrpc: failed accept; backoff %v", sleep)
 				time.Sleep(sleep)
 				continue
 			}
@@ -100,7 +100,7 @@ func (s *Server) Serve(l net.Listener) error {
 
 		approved, handshake, err := handshaker.Handshake(ctx, conn)
 		if err != nil {
-			log.L.WithError(err).Errorf("ttrpc: refusing connection after handshake")
+			logrus.WithError(err).Errorf("ttrpc: refusing connection after handshake")
 			conn.Close()
 			continue
 		}
@@ -416,12 +416,12 @@ func (c *serverConn) run(sctx context.Context) {
 		case response := <-responses:
 			p, err := c.server.codec.Marshal(response.resp)
 			if err != nil {
-				log.L.WithError(err).Error("failed marshaling response")
+				logrus.WithError(err).Error("failed marshaling response")
 				return
 			}
 
 			if err := ch.send(ctx, response.id, messageTypeResponse, p); err != nil {
-				log.L.WithError(err).Error("failed sending message on channel")
+				logrus.WithError(err).Error("failed sending message on channel")
 				return
 			}
 
@@ -432,7 +432,7 @@ func (c *serverConn) run(sctx context.Context) {
 			// requests due to a terminal error.
 			recvErr = nil // connection is now "closing"
 			if err != nil && err != io.EOF {
-				log.L.WithError(err).Error("error receiving message")
+				logrus.WithError(err).Error("error receiving message")
 			}
 		case <-shutdown:
 			return
