@@ -9,9 +9,9 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/containerd/containerd/log"
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/status"
 )
 
@@ -180,7 +180,7 @@ func (c *Client) run() {
 		case msg := <-incoming:
 			call, ok := waiters[msg.StreamID]
 			if !ok {
-				log.L.Errorf("ttrpc: received message for unknown channel %v", msg.StreamID)
+				logrus.Errorf("ttrpc: received message for unknown channel %v", msg.StreamID)
 				continue
 			}
 
