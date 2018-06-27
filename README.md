@@ -25,7 +25,7 @@ Create a gogo vanity binary (see
 [`cmd/protoc-gen-gogottrpc/main.go`](cmd/protoc-gen-gogottrpc/main.go) for an
 example with the ttrpc plugin enabled.
 
-It's recommended to use [`protobuild`](https://github.com/containerd/protobuild)
+It's recommended to use [`protobuild`](https://github.com//stevvooe/protobuild)
 to build the protobufs for this project, but this will work with protoc
 directly, if required.
 
