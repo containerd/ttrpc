@@ -1,10 +1,10 @@
 package main
 
 import (
+	_ "github.com/containerd/ttrpc/plugin"
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	"github.com/gogo/protobuf/vanity"
 	"github.com/gogo/protobuf/vanity/command"
-	_ "github.com/stevvooe/ttrpc/plugin"
 )
 
 func main() {

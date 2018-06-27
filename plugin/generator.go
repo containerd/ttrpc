@@ -32,7 +32,7 @@ func (p *ttrpcGenerator) Generate(file *generator.FileDescriptor) {
 	p.PluginImports = generator.NewPluginImports(p.Generator)
 	p.contextPkg = p.NewImport("context")
 	p.typeurlPkg = p.NewImport("github.com/containerd/typeurl")
-	p.ttrpcPkg = p.NewImport("github.com/stevvooe/ttrpc")
+	p.ttrpcPkg = p.NewImport("github.com/containerd/ttrpc")
 
 	for _, service := range file.GetService() {
 		serviceName := service.GetName()
