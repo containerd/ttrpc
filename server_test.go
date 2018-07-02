@@ -107,7 +107,7 @@ func TestServer(t *testing.T) {
 
 	registerTestingService(server, testImpl)
 
-	go server.Serve(listener)
+	go server.Serve(ctx, listener)
 	defer server.Shutdown(ctx)
 
 	const calls = 2
@@ -134,7 +134,7 @@ func TestServerNotFound(t *testing.T) {
 	defer cleanup()
 	defer listener.Close()
 	go func() {
-		errs <- server.Serve(listener)
+		errs <- server.Serve(ctx, listener)
 	}()
 
 	var tp testPayload
@@ -156,13 +156,14 @@ func TestServerNotFound(t *testing.T) {
 
 func TestServerListenerClosed(t *testing.T) {
 	var (
+		ctx         = context.Background()
 		server      = mustServer(t)(NewServer())
 		_, listener = newTestListener(t)
 		errs        = make(chan error, 1)
 	)
 
 	go func() {
-		errs <- server.Serve(listener)
+		errs <- server.Serve(ctx, listener)
 	}()
 
 	if err := listener.Close(); err != nil {
@@ -211,7 +212,7 @@ func TestServerShutdown(t *testing.T) {
 	})
 
 	go func() {
-		serveErrs <- server.Serve(listener)
+		serveErrs <- server.Serve(ctx, listener)
 	}()
 
 	// send a series of requests that will get blocked
@@ -254,6 +255,7 @@ func TestServerShutdown(t *testing.T) {
 
 func TestServerClose(t *testing.T) {
 	var (
+		ctx         = context.Background()
 		server      = mustServer(t)(NewServer())
 		_, listener = newTestListener(t)
 		startClose  = make(chan struct{})
@@ -262,7 +264,7 @@ func TestServerClose(t *testing.T) {
 
 	go func() {
 		close(startClose)
-		errs <- server.Serve(listener)
+		errs <- server.Serve(ctx, listener)
 	}()
 
 	<-startClose
@@ -289,7 +291,7 @@ func TestOversizeCall(t *testing.T) {
 	defer cleanup()
 	defer listener.Close()
 	go func() {
-		errs <- server.Serve(listener)
+		errs <- server.Serve(ctx, listener)
 	}()
 
 	registerTestingService(server, &testingServer{})
@@ -324,7 +326,7 @@ func TestClientEOF(t *testing.T) {
 	defer cleanup()
 	defer listener.Close()
 	go func() {
-		errs <- server.Serve(listener)
+		errs <- server.Serve(ctx, listener)
 	}()
 
 	registerTestingService(server, &testingServer{})
@@ -362,7 +364,7 @@ func TestUnixSocketHandshake(t *testing.T) {
 	defer cleanup()
 	defer listener.Close()
 	go func() {
-		errs <- server.Serve(listener)
+		errs <- server.Serve(ctx, listener)
 	}()
 
 	registerTestingService(server, &testingServer{})
@@ -389,7 +391,7 @@ func BenchmarkRoundTrip(b *testing.B) {
 
 	registerTestingService(server, testImpl)
 
-	go server.Serve(listener)
+	go server.Serve(ctx, listener)
 	defer server.Shutdown(ctx)
 
 	var tp testPayload
@@ -421,7 +423,7 @@ func BenchmarkRoundTripUnixSocketCreds(b *testing.B) {
 
 	registerTestingService(server, testImpl)
 
-	go server.Serve(listener)
+	go server.Serve(ctx, listener)
 	defer server.Shutdown(ctx)
 
 	var tp testPayload
