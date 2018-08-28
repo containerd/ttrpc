@@ -332,10 +332,6 @@ func TestClientEOF(t *testing.T) {
 	registerTestingService(server, &testingServer{})
 
 	tp := &testPayload{}
-	// do a regular call
-	if err := client.Call(ctx, serviceName, "Test", tp, tp); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
 
 	// shutdown the server so the client stops receiving stuff.
 	if err := server.Shutdown(ctx); err != nil {
