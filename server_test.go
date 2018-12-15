@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -57,7 +58,8 @@ func (tc *testingClient) Test(ctx context.Context, req *testPayload) (*testPaylo
 }
 
 type testPayload struct {
-	Foo string `protobuf:"bytes,1,opt,name=foo,proto3"`
+	Foo      string `protobuf:"bytes,1,opt,name=foo,proto3"`
+	Deadline int64  `protobuf:"varint,2,opt,name=deadline,proto3"`
 }
 
 func (r *testPayload) Reset()         { *r = testPayload{} }
@@ -68,7 +70,11 @@ func (r *testPayload) ProtoMessage()  {}
 type testingServer struct{}
 
 func (s *testingServer) Test(ctx context.Context, req *testPayload) (*testPayload, error) {
-	return &testPayload{Foo: strings.Repeat(req.Foo, 2)}, nil
+	tp := &testPayload{Foo: strings.Repeat(req.Foo, 2)}
+	if dl, ok := ctx.Deadline(); ok {
+		tp.Deadline = dl.UnixNano()
+	}
+	return tp, nil
 }
 
 // registerTestingService mocks more of what is generated code. Unlike grpc, we
@@ -373,6 +379,34 @@ func TestUnixSocketHandshake(t *testing.T) {
 	// server shutdown, but we still make a call.
 	if err := client.Call(ctx, serviceName, "Test", &tp, &tp); err != nil {
 		t.Fatalf("unexpected error making call: %v", err)
+	}
+}
+
+func TestServerRequestTimeout(t *testing.T) {
+	var (
+		ctx, cancel     = context.WithDeadline(context.Background(), time.Now().Add(10*time.Minute))
+		server          = mustServer(t)(NewServer())
+		addr, listener  = newTestListener(t)
+		testImpl        = &testingServer{}
+		client, cleanup = newTestClient(t, addr)
+		result          testPayload
+	)
+	defer cancel()
+	defer cleanup()
+	defer listener.Close()
+
+	registerTestingService(server, testImpl)
+
+	go server.Serve(ctx, listener)
+	defer server.Shutdown(ctx)
+
+	if err := client.Call(ctx, serviceName, "Test", &testPayload{}, &result); err != nil {
+		t.Fatalf("unexpected error making call: %v", err)
+	}
+
+	dl, _ := ctx.Deadline()
+	if result.Deadline != dl.UnixNano() {
+		t.Fatalf("expected deadline %v, actual: %v", dl, result.Deadline)
 	}
 }
 
