@@ -700,7 +700,7 @@ func skipExample(dAtA []byte) (n int, err error) {
 }
 
 var (
-	ErrInvalidLengthExample = fmt.Errorf("proto: negative length found during unmarshalling")
+	ErrInvalidLengthExample = fmt.Errorf("proto: negative length found during unmarshaling")
 	ErrIntOverflowExample   = fmt.Errorf("proto: integer overflow")
 )
 
