@@ -255,7 +255,7 @@ func (c *Client) recv(resp *Response, msg *message) error {
 	}
 
 	if msg.Type != messageTypeResponse {
-		return errors.New("unkown message type received")
+		return errors.New("unknown message type received")
 	}
 
 	defer c.channel.putmbuf(msg.p)
