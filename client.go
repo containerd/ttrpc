@@ -51,6 +51,7 @@ type Client struct {
 
 type ClientOpts func(c *Client)
 
+// WithOnClose sets a close func to be called when the server is closed
 func WithOnClose(onClose func()) ClientOpts {
 	return func(c *Client) {
 		c.closeFunc = onClose
@@ -151,6 +152,12 @@ func (c *Client) Close() error {
 	})
 
 	return nil
+}
+
+// OnClose allows a close func to be called when the server is closed
+// Deprecated: use NewClient(con, WithOnClose(closer)) instead
+func (c *Client) OnClose(closer func()) {
+	c.closeFunc = closer
 }
 
 type message struct {
