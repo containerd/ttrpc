@@ -452,6 +452,11 @@ func (c *serverConn) run(sctx context.Context) {
 			if err != nil && err != io.EOF {
 				logrus.WithError(err).Error("error receiving message")
 			}
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				// The client went away and we should stop processing
+				// requests, so that the client connection is closed
+				return
+			}
 		case <-shutdown:
 			return
 		}
