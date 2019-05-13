@@ -449,13 +449,13 @@ func (c *serverConn) run(sctx context.Context) {
 			// branch. Basically, it means that we are no longer receiving
 			// requests due to a terminal error.
 			recvErr = nil // connection is now "closing"
-			if err != nil && err != io.EOF {
-				logrus.WithError(err).Error("error receiving message")
-			}
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				// The client went away and we should stop processing
 				// requests, so that the client connection is closed
 				return
+			}
+			if err != nil {
+				logrus.WithError(err).Error("error receiving message")
 			}
 		case <-shutdown:
 			return
