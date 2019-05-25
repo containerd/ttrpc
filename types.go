@@ -23,11 +23,11 @@ import (
 )
 
 type Request struct {
-	Service     string  `protobuf:"bytes,1,opt,name=service,proto3"`
-	Method      string  `protobuf:"bytes,2,opt,name=method,proto3"`
-	Payload     []byte  `protobuf:"bytes,3,opt,name=payload,proto3"`
-	TimeoutNano int64   `protobuf:"varint,4,opt,name=timeout_nano,proto3"`
-	Headers     Headers `protobuf:"bytes,5,opt,name=headers,proto3" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Service     string   `protobuf:"bytes,1,opt,name=service,proto3"`
+	Method      string   `protobuf:"bytes,2,opt,name=method,proto3"`
+	Payload     []byte   `protobuf:"bytes,3,opt,name=payload,proto3"`
+	TimeoutNano int64    `protobuf:"varint,4,opt,name=timeout_nano,proto3"`
+	Metadata    Metadata `protobuf:"bytes,5,opt,name=metadata,proto3" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
 func (r *Request) Reset()         { *r = Request{} }

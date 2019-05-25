@@ -99,8 +99,8 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 		cresp = &Response{}
 	)
 
-	if headers, ok := GetHeaders(ctx); ok {
-		creq.Headers = headers
+	if metadata, ok := GetMetadata(ctx); ok {
+		creq.Metadata = metadata
 	}
 
 	if dl, ok := ctx.Deadline(); ok {

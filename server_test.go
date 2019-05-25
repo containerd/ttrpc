@@ -61,7 +61,7 @@ func (tc *testingClient) Test(ctx context.Context, req *testPayload) (*testPaylo
 type testPayload struct {
 	Foo      string `protobuf:"bytes,1,opt,name=foo,proto3"`
 	Deadline int64  `protobuf:"varint,2,opt,name=deadline,proto3"`
-	Hdr      string `protobuf:"bytes,3,opt,name=hdr,proto3"`
+	Metadata string `protobuf:"bytes,3,opt,name=metadata,proto3"`
 }
 
 func (r *testPayload) Reset()         { *r = testPayload{} }
@@ -77,8 +77,8 @@ func (s *testingServer) Test(ctx context.Context, req *testPayload) (*testPayloa
 		tp.Deadline = dl.UnixNano()
 	}
 
-	if v, ok := GetHeader(ctx, "foo"); ok {
-		tp.Hdr = v
+	if v, ok := GetMetadataValue(ctx, "foo"); ok {
+		tp.Metadata = v
 	}
 
 	return tp, nil
@@ -546,7 +546,7 @@ func roundTrip(ctx context.Context, t *testing.T, client *testingClient, value s
 		}
 	)
 
-	ctx = WithHeaders(ctx, Headers{"foo": makeStringList("bar")})
+	ctx = WithMetadata(ctx, Metadata{"foo": makeStringList("bar")})
 
 	resp, err := client.Test(ctx, tp)
 	if err != nil {
@@ -555,7 +555,7 @@ func roundTrip(ctx context.Context, t *testing.T, client *testingClient, value s
 
 	results <- callResult{
 		input:    tp,
-		expected: &testPayload{Foo: strings.Repeat(tp.Foo, 2), Hdr: "bar"},
+		expected: &testPayload{Foo: strings.Repeat(tp.Foo, 2), Metadata: "bar"},
 		received: resp,
 	}
 }

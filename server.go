@@ -466,8 +466,8 @@ func (c *serverConn) run(sctx context.Context) {
 var noopFunc = func() {}
 
 func getRequestContext(ctx context.Context, req *Request) (retCtx context.Context, cancel func()) {
-	if req.Headers != nil {
-		ctx = WithHeaders(ctx, req.Headers)
+	if req.Metadata != nil {
+		ctx = WithMetadata(ctx, req.Metadata)
 	}
 
 	cancel = noopFunc
