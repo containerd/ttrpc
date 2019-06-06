@@ -42,11 +42,12 @@ type Client struct {
 	channel *channel
 	calls   chan *callRequest
 
-	closed    chan struct{}
-	closeOnce sync.Once
-	closeFunc func()
-	done      chan struct{}
-	err       error
+	closed      chan struct{}
+	closeOnce   sync.Once
+	closeFunc   func()
+	done        chan struct{}
+	err         error
+	interceptor UnaryClientInterceptor
 }
 
 type ClientOpts func(c *Client)
@@ -57,15 +58,22 @@ func WithOnClose(onClose func()) ClientOpts {
 	}
 }
 
+func WithUnaryClientInterceptor(i UnaryClientInterceptor) ClientOpts {
+	return func(c *Client) {
+		c.interceptor = i
+	}
+}
+
 func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
 	c := &Client{
-		codec:     codec{},
-		conn:      conn,
-		channel:   newChannel(conn),
-		calls:     make(chan *callRequest),
-		closed:    make(chan struct{}),
-		done:      make(chan struct{}),
-		closeFunc: func() {},
+		codec:       codec{},
+		conn:        conn,
+		channel:     newChannel(conn),
+		calls:       make(chan *callRequest),
+		closed:      make(chan struct{}),
+		done:        make(chan struct{}),
+		closeFunc:   func() {},
+		interceptor: defaultClientInterceptor,
 	}
 
 	for _, o := range opts {
@@ -107,7 +115,10 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 		creq.TimeoutNano = dl.Sub(time.Now()).Nanoseconds()
 	}
 
-	if err := c.dispatch(ctx, creq, cresp); err != nil {
+	info := &UnaryClientInfo{
+		FullMethod: fullPath(service, method),
+	}
+	if err := c.interceptor(ctx, creq, cresp, info, c.dispatch); err != nil {
 		return err
 	}
 
