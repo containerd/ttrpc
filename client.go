@@ -36,6 +36,7 @@ import (
 // closed.
 var ErrClosed = errors.New("ttrpc: closed")
 
+// Client for a ttrpc server
 type Client struct {
 	codec   codec
 	conn    net.Conn
@@ -50,14 +51,17 @@ type Client struct {
 	interceptor UnaryClientInterceptor
 }
 
+// ClientOpts configures a client
 type ClientOpts func(c *Client)
 
+// WithOnClose sets the close func whenever the client's Close() method is called
 func WithOnClose(onClose func()) ClientOpts {
 	return func(c *Client) {
 		c.closeFunc = onClose
 	}
 }
 
+// WithUnaryClientInterceptor sets the provided client interceptor
 func WithUnaryClientInterceptor(i UnaryClientInterceptor) ClientOpts {
 	return func(c *Client) {
 		c.interceptor = i

@@ -23,6 +23,7 @@ type serverConfig struct {
 	interceptor UnaryServerInterceptor
 }
 
+// ServerOpt for configuring a ttrpc server
 type ServerOpt func(*serverConfig) error
 
 // WithServerHandshaker can be passed to NewServer to ensure that the
@@ -39,6 +40,7 @@ func WithServerHandshaker(handshaker Handshaker) ServerOpt {
 	}
 }
 
+// WithUnaryServerInterceptor sets the provided interceptor on the server
 func WithUnaryServerInterceptor(i UnaryServerInterceptor) ServerOpt {
 	return func(c *serverConfig) error {
 		if c.interceptor != nil {
