@@ -53,10 +53,13 @@ func NewServer(opts ...ServerOpt) (*Server, error) {
 			return nil, err
 		}
 	}
+	if config.interceptor == nil {
+		config.interceptor = defaultServerInterceptor
+	}
 
 	return &Server{
 		config:      config,
-		services:    newServiceSet(),
+		services:    newServiceSet(config.interceptor),
 		done:        make(chan struct{}),
 		listeners:   make(map[net.Listener]struct{}),
 		connections: make(map[*serverConn]struct{}),
