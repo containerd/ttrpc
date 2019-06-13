@@ -18,7 +18,6 @@ package ttrpc
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"net"
 	"reflect"
@@ -31,7 +30,6 @@ import (
 
 func TestReadWriteMessage(t *testing.T) {
 	var (
-		ctx      = context.Background()
 		w, r     = net.Pipe()
 		ch       = newChannel(w)
 		rch      = newChannel(r)
@@ -46,7 +44,7 @@ func TestReadWriteMessage(t *testing.T) {
 
 	go func() {
 		for i, msg := range messages {
-			if err := ch.send(ctx, uint32(i), 1, msg); err != nil {
+			if err := ch.send(uint32(i), 1, msg); err != nil {
 				errs <- err
 				return
 			}
@@ -56,7 +54,7 @@ func TestReadWriteMessage(t *testing.T) {
 	}()
 
 	for {
-		_, p, err := rch.recv(ctx)
+		_, p, err := rch.recv()
 		if err != nil {
 			if errors.Cause(err) != io.EOF {
 				t.Fatal(err)
@@ -91,7 +89,6 @@ func TestReadWriteMessage(t *testing.T) {
 
 func TestMessageOversize(t *testing.T) {
 	var (
-		ctx      = context.Background()
 		w, r     = net.Pipe()
 		wch, rch = newChannel(w), newChannel(r)
 		msg      = bytes.Repeat([]byte("a message of massive length"), 512<<10)
@@ -99,12 +96,12 @@ func TestMessageOversize(t *testing.T) {
 	)
 
 	go func() {
-		if err := wch.send(ctx, 1, 1, msg); err != nil {
+		if err := wch.send(1, 1, msg); err != nil {
 			errs <- err
 		}
 	}()
 
-	_, _, err := rch.recv(ctx)
+	_, _, err := rch.recv()
 	if err == nil {
 		t.Fatalf("error expected reading with small buffer")
 	}

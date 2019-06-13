@@ -351,7 +351,7 @@ func TestClientEOF(t *testing.T) {
 	}
 
 	// shutdown the server so the client stops receiving stuff.
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-errs; err != ErrServerClosed {
