@@ -344,7 +344,7 @@ func (c *serverConn) run(sctx context.Context) {
 			default: // proceed
 			}
 
-			mh, p, err := ch.recv(ctx)
+			mh, p, err := ch.recv()
 			if err != nil {
 				status, ok := status.FromError(err)
 				if !ok {
@@ -441,7 +441,7 @@ func (c *serverConn) run(sctx context.Context) {
 				return
 			}
 
-			if err := ch.send(ctx, response.id, messageTypeResponse, p); err != nil {
+			if err := ch.send(response.id, messageTypeResponse, p); err != nil {
 				logrus.WithError(err).Error("failed sending message on channel")
 				return
 			}
