@@ -202,7 +202,7 @@ func (r *receiver) run(ctx context.Context, c *channel) {
 				if !ok {
 					// treat all errors that are not an rpc status as terminal.
 					// all others poison the connection.
-					r.err = err
+					r.err = filterCloseErr(err)
 					return
 				}
 			}
@@ -328,22 +328,21 @@ func (c *Client) recv(resp *Response, msg *message) error {
 //
 // This purposely ignores errors with a wrapped cause.
 func filterCloseErr(err error) error {
-	if err == nil {
+	switch {
+	case err == nil:
 		return nil
-	}
-
-	if err == io.EOF {
+	case err == io.EOF:
 		return ErrClosed
-	}
-
-	if strings.Contains(err.Error(), "use of closed network connection") {
+	case errors.Cause(err) == io.EOF:
 		return ErrClosed
-	}
-
-	// if we have an epipe on a write, we cast to errclosed
-	if oerr, ok := err.(*net.OpError); ok && oerr.Op == "write" {
-		if serr, ok := oerr.Err.(*os.SyscallError); ok && serr.Err == syscall.EPIPE {
-			return ErrClosed
+	case strings.Contains(err.Error(), "use of closed network connection"):
+		return ErrClosed
+	default:
+		// if we have an epipe on a write, we cast to errclosed
+		if oerr, ok := err.(*net.OpError); ok && oerr.Op == "write" {
+			if serr, ok := oerr.Err.(*os.SyscallError); ok && serr.Err == syscall.EPIPE {
+				return ErrClosed
+			}
 		}
 	}
 
