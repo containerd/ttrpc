@@ -109,7 +109,7 @@ func client() error {
 	}
 
 	ctx := context.Background()
-	md := ttrpc.Metadata{}
+	md := ttrpc.MD{}
 	md.Set("name", "koye")
 	ctx = ttrpc.WithMetadata(ctx, md)
 
