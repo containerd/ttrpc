@@ -112,7 +112,7 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 	)
 
 	if metadata, ok := GetMetadata(ctx); ok {
-		creq.Metadata = metadata
+		metadata.setRequest(creq)
 	}
 
 	if dl, ok := ctx.Deadline(); ok {

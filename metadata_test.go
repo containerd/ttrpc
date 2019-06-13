@@ -21,8 +21,8 @@ import (
 	"testing"
 )
 
-func TestMetadata_Get(t *testing.T) {
-	metadata := make(Metadata)
+func TestMetadataGet(t *testing.T) {
+	metadata := make(MD)
 	metadata.Set("foo", "1", "2")
 
 	if list, ok := metadata.Get("foo"); !ok {
@@ -36,8 +36,8 @@ func TestMetadata_Get(t *testing.T) {
 	}
 }
 
-func TestMetadata_GetInvalidKey(t *testing.T) {
-	metadata := make(Metadata)
+func TestMetadataGetInvalidKey(t *testing.T) {
+	metadata := make(MD)
 	metadata.Set("foo", "1", "2")
 
 	if _, ok := metadata.Get("invalid"); ok {
@@ -45,8 +45,8 @@ func TestMetadata_GetInvalidKey(t *testing.T) {
 	}
 }
 
-func TestMetadata_Unset(t *testing.T) {
-	metadata := make(Metadata)
+func TestMetadataUnset(t *testing.T) {
+	metadata := make(MD)
 	metadata.Set("foo", "1", "2")
 	metadata.Set("foo")
 
@@ -55,8 +55,8 @@ func TestMetadata_Unset(t *testing.T) {
 	}
 }
 
-func TestMetadata_Replace(t *testing.T) {
-	metadata := make(Metadata)
+func TestMetadataReplace(t *testing.T) {
+	metadata := make(MD)
 	metadata.Set("foo", "1", "2")
 	metadata.Set("foo", "3", "4")
 
@@ -71,8 +71,8 @@ func TestMetadata_Replace(t *testing.T) {
 	}
 }
 
-func TestMetadata_Append(t *testing.T) {
-	metadata := make(Metadata)
+func TestMetadataAppend(t *testing.T) {
+	metadata := make(MD)
 	metadata.Set("foo", "1")
 	metadata.Append("foo", "2")
 	metadata.Append("bar", "3")
@@ -94,8 +94,8 @@ func TestMetadata_Append(t *testing.T) {
 	}
 }
 
-func TestMetadata_Context(t *testing.T) {
-	metadata := make(Metadata)
+func TestMetadataContext(t *testing.T) {
+	metadata := make(MD)
 	metadata.Set("foo", "bar")
 
 	ctx := WithMetadata(context.Background(), metadata)
