@@ -1,6 +1,8 @@
 language: go
 
 go:
+  - "1.12.9"
+  - "1.12.10"
   - "1.12.x"
 
 install:
