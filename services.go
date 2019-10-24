@@ -22,10 +22,10 @@ import (
 	"os"
 	"path"
 
+	"github.com/containerd/ttrpc/codes"
+	"github.com/containerd/ttrpc/status"
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type Method func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error)
