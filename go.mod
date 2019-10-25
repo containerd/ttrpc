@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/gogo/protobuf v1.2.1
+	github.com/golang/protobuf v1.3.1
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/procfs v0.0.0-20190522114515-bc1a522cf7b1
 	github.com/sirupsen/logrus v1.4.2
