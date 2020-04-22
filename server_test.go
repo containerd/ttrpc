@@ -459,6 +459,53 @@ func TestServerRequestTimeout(t *testing.T) {
 	}
 }
 
+func TestServerConnectionsLeak(t *testing.T) {
+	var (
+		ctx             = context.Background()
+		server          = mustServer(t)(NewServer())
+		addr, listener  = newTestListener(t)
+		client, cleanup = newTestClient(t, addr)
+	)
+	defer cleanup()
+	defer listener.Close()
+
+	connectionCountBefore := server.countConnection()
+
+	go server.Serve(ctx, listener)
+
+	registerTestingService(server, &testingServer{})
+
+	tp := &testPayload{}
+	// do a regular call
+	if err := client.Call(ctx, serviceName, "Test", tp, tp); err != nil {
+		t.Fatalf("unexpected error during test call: %v", err)
+	}
+
+	connectionCount := server.countConnection()
+	if connectionCount != 1 {
+		t.Fatalf("unexpected connection count: %d, expected: %d", connectionCount, 1)
+	}
+
+	// close the client, so that server gets EOF
+	if err := client.Close(); err != nil {
+		t.Fatalf("unexpected error while closing client: %v", err)
+	}
+
+	// server should eventually close the client connection
+	maxAttempts := 20
+	for i := 1; i <= maxAttempts; i++ {
+		connectionCountAfter := server.countConnection()
+		if connectionCountAfter == connectionCountBefore {
+			break
+		}
+		if i == maxAttempts {
+			t.Fatalf("expected number of connections to be equal %d after client close, got %d connections",
+				connectionCountBefore, connectionCountAfter)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func BenchmarkRoundTrip(b *testing.B) {
 	var (
 		ctx             = context.Background()
