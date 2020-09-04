@@ -23,9 +23,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/containerd/ttrpc/grpc/status"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestReadWriteMessage(t *testing.T) {

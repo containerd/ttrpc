@@ -23,9 +23,9 @@ import (
 	"net"
 	"sync"
 
+	"github.com/containerd/ttrpc/grpc/status"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
