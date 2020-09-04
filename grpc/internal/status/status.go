@@ -47,9 +47,9 @@ import (
 	"errors"
 	"fmt"
 
+	spb "github.com/gogo/googleapis/google/rpc"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 )
 
