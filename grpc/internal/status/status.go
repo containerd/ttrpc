@@ -48,8 +48,8 @@ import (
 	"fmt"
 
 	spb "github.com/gogo/googleapis/google/rpc"
+	ptypes "github.com/gogo/protobuf/types"
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/codes"
 )
 
