@@ -607,12 +607,12 @@ func roundTrip(ctx context.Context, t *testing.T, client *testingClient, value s
 	}
 }
 
-func newTestClient(t testing.TB, addr string) (*Client, func()) {
+func newTestClient(t testing.TB, addr string, opts ...ClientOpts) (*Client, func()) {
 	conn, err := net.Dial("unix", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := NewClient(conn)
+	client := NewClient(conn, opts...)
 	return client, func() {
 		conn.Close()
 		client.Close()
