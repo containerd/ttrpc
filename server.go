@@ -18,7 +18,6 @@ package ttrpc
 
 import (
 	"context"
-	"io"
 	"math/rand"
 	"net"
 	"sync"
@@ -457,7 +456,9 @@ func (c *serverConn) run(sctx context.Context) {
 			}
 
 			if err := ch.send(response.id, messageTypeResponse, p); err != nil {
-				logrus.WithError(err).Error("failed sending message on channel")
+				if filterCloseErr(err) != ErrClosed {
+					logrus.WithError(err).Error("failed sending message on channel")
+				}
 				return
 			}
 
@@ -466,15 +467,10 @@ func (c *serverConn) run(sctx context.Context) {
 			// TODO(stevvooe): Not wildly clear what we should do in this
 			// branch. Basically, it means that we are no longer receiving
 			// requests due to a terminal error.
-			recvErr = nil // connection is now "closing"
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				// The client went away and we should stop processing
-				// requests, so that the client connection is closed
-				return
-			}
-			if err != nil {
+			if filterCloseErr(err) != ErrClosed {
 				logrus.WithError(err).Error("error receiving message")
 			}
+			return
 		case <-shutdown:
 			return
 		}
