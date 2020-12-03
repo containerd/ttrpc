@@ -234,13 +234,19 @@ func (r *receiver) run(ctx context.Context, c *channel) {
 }
 
 func (c *Client) run() {
+	type streamCall struct {
+		streamID uint32
+		call     *callRequest
+	}
 	var (
-		streamID      uint32 = 1
-		waiters              = make(map[uint32]*callRequest)
-		calls                = c.calls
-		incoming             = make(chan *message)
-		receiversDone        = make(chan struct{})
-		wg            sync.WaitGroup
+		streamID       uint32 = 1
+		waiters               = make(map[uint32]*callRequest)
+		calls                 = c.calls
+		requests              = make(chan streamCall)
+		requestsFailed        = make(chan streamCall)
+		incoming              = make(chan *message)
+		receiversDone         = make(chan struct{})
+		wg             sync.WaitGroup
 	)
 
 	// broadcast the shutdown error to the remaining waiters.
@@ -261,6 +267,21 @@ func (c *Client) run() {
 	}()
 	go recv.run(c.ctx, c.channel)
 
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case streamCall := <-requests:
+				if err := c.send(streamCall.streamID, messageTypeRequest, streamCall.call.req); err != nil {
+					streamCall.call.errs <- err // errs is buffered so should not block.
+					requestsFailed <- streamCall
+					continue
+				}
+			}
+		}
+	}(c.ctx)
+
 	defer func() {
 		c.conn.Close()
 		c.userCloseFunc()
@@ -270,13 +291,21 @@ func (c *Client) run() {
 	for {
 		select {
 		case call := <-calls:
-			if err := c.send(streamID, messageTypeRequest, call.req); err != nil {
-				call.errs <- err
-				continue
-			}
-
+			go func(streamID uint32, call *callRequest) {
+				sc := streamCall{
+					streamID: streamID,
+					call:     call,
+				}
+				select {
+				case <-c.ctx.Done():
+				case requests <- sc:
+				}
+			}(streamID, call)
 			waiters[streamID] = call
 			streamID += 2 // enforce odd client initiated request ids
+		case streamCall := <-requestsFailed:
+			// Sending the request failed, so stop tracking this stream ID.
+			delete(waiters, streamCall.streamID)
 		case msg := <-incoming:
 			call, ok := waiters[msg.StreamID]
 			if !ok {
