@@ -103,6 +103,8 @@ func init() {
 	proto.RegisterType((*testPayload)(nil), "testPayload")
 	proto.RegisterType((*Request)(nil), "Request")
 	proto.RegisterType((*Response)(nil), "Response")
+	proto.RegisterType((*FileList)(nil), "FileList")
+	proto.RegisterType((*testFdPayload)(nil), "testFdPayload")
 }
 
 func TestServer(t *testing.T) {

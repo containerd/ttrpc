@@ -302,8 +302,9 @@ func (c *serverConn) close() error {
 func (c *serverConn) run(sctx context.Context) {
 	type (
 		request struct {
-			id  uint32
-			req *Request
+			id    uint32
+			req   *Request
+			files *FileList
 		}
 
 		response struct {
@@ -376,20 +377,42 @@ func (c *serverConn) run(sctx context.Context) {
 				continue
 			}
 
-			if mh.Type != messageTypeRequest {
-				// we must ignore this for future compat.
-				continue
-			}
-
-			var req Request
-			if err := c.server.codec.Unmarshal(p, &req); err != nil {
-				ch.putmbuf(p)
-				if !sendImmediate(mh.StreamID, status.Newf(codes.InvalidArgument, "unmarshal request error: %v", err)) {
-					return
+			var (
+				files *FileList
+				req   *Request
+			)
+			switch mh.Type {
+			case messageTypeRequest:
+				req = &Request{}
+				if err := c.server.codec.Unmarshal(p, req); err != nil {
+					ch.putmbuf(p)
+					if !sendImmediate(mh.StreamID, status.Newf(codes.InvalidArgument, "unmarshal request error: %v", err)) {
+						return
+					}
+					continue
 				}
+				ch.putmbuf(p)
+			case messageTypeFileDescriptor:
+				files = &FileList{}
+				if err := c.server.codec.Unmarshal(p, files); err != nil {
+					ch.putmbuf(p)
+					if !sendImmediate(mh.StreamID, status.Newf(codes.InvalidArgument, "unmarshal file list error: %v", err)) {
+						return
+					}
+					continue
+				}
+
+				if err := ch.recvFD(files); err != nil {
+					ch.putmbuf(p)
+					if !sendImmediate(mh.StreamID, status.Newf(codes.InvalidArgument, "unmarshal file list error: %v", err)) {
+						return
+					}
+				}
+				ch.putmbuf(p)
+			default:
+				// Ignore other types for future compatability
 				continue
 			}
-			ch.putmbuf(p)
 
 			if mh.StreamID%2 != 1 {
 				// enforce odd client initiated identifiers.
@@ -403,8 +426,9 @@ func (c *serverConn) run(sctx context.Context) {
 			// because we have already accepted the client request.
 			select {
 			case requests <- request{
-				id:  mh.StreamID,
-				req: &req,
+				id:    mh.StreamID,
+				req:   req,
+				files: files,
 			}:
 			case <-done:
 				return
@@ -432,19 +456,31 @@ func (c *serverConn) run(sctx context.Context) {
 		case request := <-requests:
 			active++
 			go func(id uint32) {
-				ctx, cancel := getRequestContext(ctx, request.req)
-				defer cancel()
+				var resp Response
 
-				p, status := c.server.services.call(ctx, request.req.Service, request.req.Method, request.req.Payload)
-				resp := &Response{
-					Status:  status.Proto(),
-					Payload: p,
+				switch {
+				case request.files != nil:
+					p, err := c.server.codec.Marshal(request.files)
+					if err != nil {
+						s, _ := status.FromError(err)
+						resp.Status = s.Proto()
+					}
+					resp.Payload = p
+				case request.req != nil:
+					ctx, cancel := getRequestContext(ctx, request.req)
+					defer cancel()
+
+					p, status := c.server.services.call(ctx, request.req.Service, request.req.Method, request.req.Payload)
+					resp.Status = status.Proto()
+					resp.Payload = p
+				default:
+					resp.Status = status.New(codes.Internal, "unknown request type").Proto()
 				}
 
 				select {
 				case responses <- response{
 					id:   id,
-					resp: resp,
+					resp: &resp,
 				}:
 				case <-done:
 				}

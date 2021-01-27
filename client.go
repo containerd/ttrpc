@@ -96,10 +96,42 @@ func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
 }
 
 type callRequest struct {
-	ctx  context.Context
-	req  *Request
-	resp *Response  // response will be written back here
-	errs chan error // error written here on completion
+	ctx   context.Context
+	req   *Request
+	resp  *Response  // response will be written back here
+	errs  chan error // error written here on completion
+	files *FileList
+}
+
+func (c *Client) Sendfd(ctx context.Context, files []*os.File) ([]int64, error) {
+	ls := make([]*File, len(files))
+	for i, f := range files {
+		ls[i] = &File{
+			Name:   f.Name(),
+			Fileno: int64(f.Fd()),
+		}
+	}
+
+	resp := &Response{}
+	fl := &FileList{List: ls}
+	if err := c.dispatch(ctx, nil, resp, fl); err != nil {
+		return nil, err
+	}
+	if resp.Status != nil && resp.Status.Code != int32(codes.OK) {
+		return nil, status.ErrorProto(resp.Status)
+	}
+
+	fl.Reset()
+
+	if err := c.codec.Unmarshal(resp.Payload, fl); err != nil {
+		return nil, err
+	}
+
+	fds := make([]int64, len(fl.List))
+	for i, f := range fl.List {
+		fds[i] = f.Fileno
+	}
+	return fds, nil
 }
 
 func (c *Client) Call(ctx context.Context, service, method string, req, resp interface{}) error {
@@ -129,7 +161,9 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 	info := &UnaryClientInfo{
 		FullMethod: fullPath(service, method),
 	}
-	if err := c.interceptor(ctx, creq, cresp, info, c.dispatch); err != nil {
+	if err := c.interceptor(ctx, creq, cresp, info, func(ctx context.Context, req *Request, resp *Response) error {
+		return c.dispatch(ctx, req, resp, nil)
+	}); err != nil {
 		return err
 	}
 
@@ -143,13 +177,14 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 	return nil
 }
 
-func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response) error {
+func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response, files *FileList) error {
 	errs := make(chan error, 1)
 	call := &callRequest{
-		ctx:  ctx,
-		req:  req,
-		resp: resp,
-		errs: errs,
+		ctx:   ctx,
+		req:   req,
+		resp:  resp,
+		errs:  errs,
+		files: files,
 	}
 
 	select {
@@ -270,13 +305,35 @@ func (c *Client) run() {
 	for {
 		select {
 		case call := <-calls:
-			if err := c.send(streamID, messageTypeRequest, call.req); err != nil {
+			var (
+				data interface{}
+				mt   messageType
+			)
+
+			switch {
+			case call.files != nil:
+				data = call.files
+				mt = messageTypeFileDescriptor
+			case call.req != nil:
+				data = call.req
+				mt = messageTypeRequest
+			}
+
+			if err := c.send(streamID, mt, data); err != nil {
 				call.errs <- err
 				continue
 			}
 
 			waiters[streamID] = call
 			streamID += 2 // enforce odd client initiated request ids
+
+			if call.files != nil {
+				if err := c.channel.sendFd(streamID, mt, call.files); err != nil {
+					call.errs <- err
+					continue
+				}
+			}
+
 		case msg := <-incoming:
 			call, ok := waiters[msg.StreamID]
 			if !ok {

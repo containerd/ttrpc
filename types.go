@@ -61,3 +61,25 @@ type KeyValue struct {
 func (m *KeyValue) Reset()         { *m = KeyValue{} }
 func (*KeyValue) ProtoMessage()    {}
 func (m *KeyValue) String() string { return fmt.Sprintf("%+#v", m) }
+
+type FileList struct {
+	List []*File `protobuf:"bytes,1,rep,name=list,proto3"`
+}
+
+func (r *FileList) Reset()         { *r = FileList{} }
+func (r *FileList) String() string { return fmt.Sprintf("%+#v", r) }
+func (r *FileList) ProtoMessage()  {}
+
+// File represents a file descriptor that is transferred.
+// Once the file descriptor is passed, the server should be able to call `os.NewFile(f.Fileno, f.Name)`
+// The Fileno field will be filled in by the server side after the descriptor has been passed.
+type File struct {
+	// Name is the name to be used when accepting the file descriptor
+	Name string `protobuf:"bytes,1,opt,name=name,proto3"`
+	// Fileno is the file descriptor id/pointer
+	Fileno int64 `protobuf:"varint,2,opt,name=timeout_nano,proto3"`
+}
+
+func (r *File) Reset()         { *r = File{} }
+func (r *File) String() string { return fmt.Sprintf("%+#v", r) }
+func (r *File) ProtoMessage()  {}

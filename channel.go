@@ -19,11 +19,13 @@ package ttrpc
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"sync"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -36,8 +38,9 @@ const (
 type messageType uint8
 
 const (
-	messageTypeRequest  messageType = 0x1
-	messageTypeResponse messageType = 0x2
+	messageTypeRequest        messageType = 0x1
+	messageTypeResponse       messageType = 0x2
+	messageTypeFileDescriptor messageType = 0x3
 )
 
 // messageHeader represents the fixed-length message header of 10 bytes sent
@@ -98,7 +101,7 @@ func newChannel(conn net.Conn) *channel {
 // the correct consumer. The bytes on the underlying channel
 // will be discarded.
 func (ch *channel) recv() (messageHeader, []byte, error) {
-	mh, err := readMessageHeader(ch.hrbuf[:], ch.br)
+	mh, err := readMessageHeader(ch.hrbuf[:messageHeaderLength], ch.conn)
 	if err != nil {
 		return messageHeader{}, nil, err
 	}
@@ -112,11 +115,76 @@ func (ch *channel) recv() (messageHeader, []byte, error) {
 	}
 
 	p := ch.getmbuf(int(mh.Length))
-	if _, err := io.ReadFull(ch.br, p); err != nil {
+	if _, err := io.ReadFull(ch.conn, p[:int(mh.Length)]); err != nil {
 		return messageHeader{}, nil, errors.Wrapf(err, "failed reading message")
 	}
 
 	return mh, p, nil
+}
+
+func (ch *channel) recvFD(files *FileList) error {
+	var (
+		fds []int
+		err error
+	)
+
+	switch t := ch.conn.(type) {
+	case FdReceiver:
+		fds, err = t.Recvfd()
+		if err != nil {
+			return err
+		}
+	case unixReader:
+		oob := ch.getmbuf(unix.CmsgSpace(len(files.List) * 4))
+		defer ch.putmbuf(oob)
+
+		_, oobn, _, _, err := t.ReadMsgUnix(make([]byte, 1), oob)
+		if err != nil {
+			return err
+		}
+
+		ls, err := unix.ParseSocketControlMessage(oob[:oobn])
+		if err != nil {
+			return fmt.Errorf("error parsing socket controll message: %w", err)
+		}
+
+		for _, m := range ls {
+			fdsTemp, err := unix.ParseUnixRights(&m)
+			if err != nil {
+				return fmt.Errorf("error parsing unix rights message: %w", err)
+			}
+			fds = append(fds, fdsTemp...)
+		}
+	default:
+		return fmt.Errorf("receiving file descriptors is not supported on the transport")
+	}
+
+	if len(files.List) != len(fds) {
+		return fmt.Errorf("received %d file descriptors, expected %d", len(fds), len(files.List))
+	}
+	for i, fd := range fds {
+		files.List[i].Fileno = int64(fd)
+	}
+	return nil
+}
+
+func (ch *channel) sendFd(streamID uint32, mt messageType, files *FileList) error {
+	fds := make([]int, len(files.List))
+
+	for i, f := range files.List {
+		fds[i] = int(f.Fileno)
+	}
+
+	switch t := ch.conn.(type) {
+	case unixWriter:
+		// Must send at least a single byte over unix sockets for the ancillary data to be accepted.
+		_, _, err := t.WriteMsgUnix(make([]byte, 1), unix.UnixRights(fds...), nil)
+		return err
+	case FdSender:
+		return t.SendFd(fds)
+	default:
+		return fmt.Errorf("sending file descriptors is not supported on the transport")
+	}
 }
 
 func (ch *channel) send(streamID uint32, t messageType, p []byte) error {
@@ -150,4 +218,22 @@ func (ch *channel) getmbuf(size int) []byte {
 
 func (ch *channel) putmbuf(p []byte) {
 	buffers.Put(&p)
+}
+
+// FdReceiver is an interface used that the transport may implement to receive file descriptors from the client
+type FdReceiver interface {
+	Recvfd() ([]int, error)
+}
+
+// FdSender is an interface used that the transport may implement to send file descriptors to the server.
+type FdSender interface {
+	SendFd([]int) error
+}
+
+type unixReader interface {
+	ReadMsgUnix(p, oob []byte) (n, oobn, flags int, addr *net.UnixAddr, err error)
+}
+
+type unixWriter interface {
+	WriteMsgUnix(b, oob []byte, addr *net.UnixAddr) (n, oobn int, err error)
 }
