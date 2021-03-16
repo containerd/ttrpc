@@ -9,5 +9,5 @@ require (
 	github.com/sirupsen/logrus v1.7.0
 	golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
 	google.golang.org/genproto v0.0.0-20200117163144-32f20d992d24
-	google.golang.org/grpc v1.26.0
+	google.golang.org/grpc v1.27.1
 )
