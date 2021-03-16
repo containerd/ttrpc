@@ -1,7 +1,7 @@
 # ttrpc
 
 [![Build Status](https://github.com/containerd/ttrpc/workflows/CI/badge.svg)](https://github.com/containerd/ttrpc/actions?query=workflow%3ACI)
-[![Build Status](https://travis-ci.org/containerd/ttrpc.svg?branch=master)](https://travis-ci.org/containerd/ttrpc)
+[![codecov](https://codecov.io/gh/containerd/ttrpc/branch/master/graph/badge.svg)](https://codecov.io/gh/containerd/ttrpc)
 
 GRPC for low-memory environments.
 
