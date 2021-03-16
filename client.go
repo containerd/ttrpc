@@ -345,9 +345,9 @@ func filterCloseErr(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Cause(err) == io.EOF:
+	case errors.Is(err, io.EOF):
 		return ErrClosed
-	case errors.Cause(err) == io.ErrUnexpectedEOF:
+	case errors.Is(err, io.ErrUnexpectedEOF):
 		return ErrClosed
 	case strings.Contains(err.Error(), "use of closed network connection"):
 		return ErrClosed
