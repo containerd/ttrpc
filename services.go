@@ -116,12 +116,12 @@ func (s *serviceSet) dispatch(ctx context.Context, serviceName, methodName strin
 func (s *serviceSet) resolve(service, method string) (Method, error) {
 	srv, ok := s.services[service]
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "service %v", service)
+		return nil, status.Errorf(codes.Unimplemented, "service %v", service)
 	}
 
 	mthd, ok := srv.Methods[method]
 	if !ok {
-		return nil, status.Errorf(codes.NotFound, "method %v", method)
+		return nil, status.Errorf(codes.Unimplemented, "method %v", method)
 	}
 
 	return mthd, nil

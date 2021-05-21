@@ -136,7 +136,7 @@ func TestServer(t *testing.T) {
 	}
 }
 
-func TestServerNotFound(t *testing.T) {
+func TestServerUnimplemented(t *testing.T) {
 	var (
 		ctx             = context.Background()
 		server          = mustServer(t)(NewServer())
@@ -155,7 +155,7 @@ func TestServerNotFound(t *testing.T) {
 		t.Fatalf("expected error from non-existent service call")
 	} else if status, ok := status.FromError(err); !ok {
 		t.Fatalf("expected status present in error: %v", err)
-	} else if status.Code() != codes.NotFound {
+	} else if status.Code() != codes.Unimplemented {
 		t.Fatalf("expected not found for method")
 	}
 
