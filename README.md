@@ -41,13 +41,8 @@ directly, if required.
 
 # Status
 
-Very new. YMMV.
-
 TODO:
 
-- [X] Plumb error codes and GRPC status
-- [X] Remove use of any type and dependency on typeurl package
-- [X] Ensure that protocol can support streaming in the future
 - [ ] Document protocol layout
 - [ ] Add testing under concurrent load to ensure
 - [ ] Verify connection error handling
