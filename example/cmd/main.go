@@ -73,7 +73,7 @@ func dumpMetadata(ctx context.Context) {
 
 func server() error {
 	s, err := ttrpc.NewServer(
-		ttrpc.WithServerHandshaker(ttrpc.UnixSocketRequireSameUser()),
+		ttrpc.WithServerHandshaker(defaultHandshaker()),
 		ttrpc.WithUnaryServerInterceptor(serverIntercept),
 	)
 	if err != nil {
