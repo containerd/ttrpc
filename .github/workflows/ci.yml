@@ -9,8 +9,12 @@ on:
 jobs:
 
   build:
-    name: TTRPC CI
-    runs-on: ubuntu-18.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-18.04, macos-10.15]
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 5
     steps:
 

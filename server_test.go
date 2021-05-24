@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -28,7 +29,6 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.com/prometheus/procfs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -366,71 +366,6 @@ func TestClientEOF(t *testing.T) {
 	}
 }
 
-func TestServerEOF(t *testing.T) {
-	var (
-		ctx             = context.Background()
-		server          = mustServer(t)(NewServer())
-		addr, listener  = newTestListener(t)
-		client, cleanup = newTestClient(t, addr)
-	)
-	defer cleanup()
-	defer listener.Close()
-
-	socketCountBefore := socketCount(t)
-
-	go server.Serve(ctx, listener)
-
-	registerTestingService(server, &testingServer{})
-
-	tp := &testPayload{}
-	// do a regular call
-	if err := client.Call(ctx, serviceName, "Test", tp, tp); err != nil {
-		t.Fatalf("unexpected error during test call: %v", err)
-	}
-
-	// close the client, so that server gets EOF
-	if err := client.Close(); err != nil {
-		t.Fatalf("unexpected error while closing client: %v", err)
-	}
-
-	// server should eventually close the client connection
-	maxAttempts := 20
-	for i := 1; i <= maxAttempts; i++ {
-		socketCountAfter := socketCount(t)
-		if socketCountAfter < socketCountBefore {
-			break
-		}
-		if i == maxAttempts {
-			t.Fatalf("expected number of open sockets to be less than %d after client close, got %d open sockets",
-				socketCountBefore, socketCountAfter)
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-func TestUnixSocketHandshake(t *testing.T) {
-	var (
-		ctx             = context.Background()
-		server          = mustServer(t)(NewServer(WithServerHandshaker(UnixSocketRequireSameUser())))
-		addr, listener  = newTestListener(t)
-		errs            = make(chan error, 1)
-		client, cleanup = newTestClient(t, addr)
-	)
-	defer cleanup()
-	defer listener.Close()
-	go func() {
-		errs <- server.Serve(ctx, listener)
-	}()
-
-	registerTestingService(server, &testingServer{})
-
-	var tp testPayload
-	// server shutdown, but we still make a call.
-	if err := client.Call(ctx, serviceName, "Test", &tp, &tp); err != nil {
-		t.Fatalf("unexpected error making call: %v", err)
-	}
-}
-
 func TestServerRequestTimeout(t *testing.T) {
 	var (
 		ctx, cancel     = context.WithDeadline(context.Background(), time.Now().Add(10*time.Minute))
@@ -534,38 +469,6 @@ func BenchmarkRoundTrip(b *testing.B) {
 	}
 }
 
-func BenchmarkRoundTripUnixSocketCreds(b *testing.B) {
-	// TODO(stevvooe): Right now, there is a 5x performance decrease when using
-	// unix socket credentials. See (UnixCredentialsFunc).Handshake for
-	// details.
-
-	var (
-		ctx             = context.Background()
-		server          = mustServer(b)(NewServer(WithServerHandshaker(UnixSocketRequireSameUser())))
-		testImpl        = &testingServer{}
-		addr, listener  = newTestListener(b)
-		client, cleanup = newTestClient(b, addr)
-		tclient         = newTestingClient(client)
-	)
-
-	defer listener.Close()
-	defer cleanup()
-
-	registerTestingService(server, testImpl)
-
-	go server.Serve(ctx, listener)
-	defer server.Shutdown(ctx)
-
-	var tp testPayload
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		if _, err := tclient.Test(ctx, &tp); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func checkServerShutdown(t *testing.T, server *Server) {
 	t.Helper()
 	server.mu.Lock()
@@ -620,7 +523,13 @@ func newTestClient(t testing.TB, addr string, opts ...ClientOpts) (*Client, func
 }
 
 func newTestListener(t testing.TB) (string, net.Listener) {
-	addr := "\x00" + t.Name()
+	var prefix string
+
+	// Abstracts sockets are only available on Linux.
+	if runtime.GOOS == "linux" {
+		prefix = "\x00"
+	}
+	addr := prefix + t.Name()
 	listener, err := net.Listen("unix", addr)
 	if err != nil {
 		t.Fatal(err)
@@ -638,23 +547,4 @@ func mustServer(t testing.TB) func(server *Server, err error) *Server {
 
 		return server
 	}
-}
-
-func socketCount(t *testing.T) int {
-	proc, err := procfs.Self()
-	if err != nil {
-		t.Fatalf("unexpected error while reading procfs: %v", err)
-	}
-	fds, err := proc.FileDescriptorTargets()
-	if err != nil {
-		t.Fatalf("unexpected error while listing open file descriptors: %v", err)
-	}
-
-	sockets := 0
-	for _, fd := range fds {
-		if strings.Contains(fd, "socket") {
-			sockets++
-		}
-	}
-	return sockets
 }
