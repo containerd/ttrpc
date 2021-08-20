@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
+	gogo "github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -100,9 +100,9 @@ func registerTestingService(srv *Server, svc testingService) {
 }
 
 func init() {
-	proto.RegisterType((*testPayload)(nil), "testPayload")
-	proto.RegisterType((*Request)(nil), "Request")
-	proto.RegisterType((*Response)(nil), "Response")
+	gogo.RegisterType((*testPayload)(nil), "testPayload")
+	gogo.RegisterType((*Request)(nil), "Request")
+	gogo.RegisterType((*Response)(nil), "Response")
 }
 
 func TestServer(t *testing.T) {

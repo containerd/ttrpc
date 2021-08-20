@@ -23,7 +23,6 @@ import (
 	"path"
 	"unsafe"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -77,7 +76,7 @@ func (s *serviceSet) dispatch(ctx context.Context, serviceName, methodName strin
 
 	unmarshal := func(obj interface{}) error {
 		switch v := obj.(type) {
-		case proto.Message:
+		case protoMessage:
 			if err := proto.Unmarshal(p, v); err != nil {
 				return status.Errorf(codes.Internal, "ttrpc: error unmarshalling payload: %v", err.Error())
 			}
@@ -101,7 +100,7 @@ func (s *serviceSet) dispatch(ctx context.Context, serviceName, methodName strin
 	}
 
 	switch v := resp.(type) {
-	case proto.Message:
+	case protoMessage:
 		r, err := proto.Marshal(v)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "ttrpc: error marshaling payload: %v", err.Error())
