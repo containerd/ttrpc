@@ -17,15 +17,30 @@
 package ttrpc
 
 import (
-	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
+
+	"google.golang.org/grpc/encoding"
+	protobufcodec "google.golang.org/grpc/encoding/proto"
 )
 
 type codec struct{}
 
+var proto encoding.Codec
+
+func init() {
+	proto = encoding.GetCodec(protobufcodec.Name)
+}
+
+// protoMessage is implemented by generated protocol buffer messages.
+type protoMessage interface {
+	Reset()
+	String() string
+	ProtoMessage()
+}
+
 func (c codec) Marshal(msg interface{}) ([]byte, error) {
 	switch v := msg.(type) {
-	case proto.Message:
+	case protoMessage:
 		return proto.Marshal(v)
 	default:
 		return nil, errors.Errorf("ttrpc: cannot marshal unknown type: %T", msg)
@@ -34,7 +49,7 @@ func (c codec) Marshal(msg interface{}) ([]byte, error) {
 
 func (c codec) Unmarshal(p []byte, msg interface{}) error {
 	switch v := msg.(type) {
-	case proto.Message:
+	case protoMessage:
 		return proto.Unmarshal(p, v)
 	default:
 		return errors.Errorf("ttrpc: cannot unmarshal into unknown type: %T", msg)
