@@ -26,7 +26,7 @@ import (
 
 	ttrpc "github.com/containerd/ttrpc"
 	"github.com/containerd/ttrpc/example"
-	"github.com/gogo/protobuf/types"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 const socket = "example-ttrpc-server"
@@ -130,6 +130,6 @@ func (s *exampleServer) Method1(ctx context.Context, r *example.Method1Request) 
 	}, nil
 }
 
-func (s *exampleServer) Method2(ctx context.Context, r *example.Method1Request) (*types.Empty, error) {
-	return &types.Empty{}, nil
+func (s *exampleServer) Method2(ctx context.Context, r *example.Method1Request) (*emptypb.Empty, error) {
+	return &emptypb.Empty{}, nil
 }
