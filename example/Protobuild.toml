@@ -1,6 +1,5 @@
 version = "unstable"
-generator = "gogottrpc"
-plugins = ["ttrpc"]
+plugins = ["go-grpc", "go-ttrpc"]
 
 # Control protoc include paths. Below are usually some good defaults, but feel
 # free to try it without them if it works for your project.
@@ -8,11 +7,6 @@ plugins = ["ttrpc"]
   # Include paths that will be added before all others. Typically, you want to
   # treat the root of the project as an include, but this may not be necessary.
   # before = ["./protobuf"]
-
-  # Paths that should be treated as include roots in relation to the vendor
-  # directory. These will be calculated with the vendor directory nearest the
-  # target package.
-  packages = ["github.com/gogo/protobuf"]
 
   # Paths that will be added untouched to the end of the includes. We use
   # `/usr/local/include` to pickup the common install location of protobuf.

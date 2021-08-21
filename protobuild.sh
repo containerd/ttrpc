@@ -26,5 +26,10 @@ PATH=$pkg_dir/cmd/protoc-gen-go-ttrpc:$HOME/go/bin:$PATH
 src_dir=$pkg_dir/example
 
 cd $pkg_dir/example
-protoc -I=$src_dir --go_out=$dest_dir --go-ttrpc_out=$dest_dir $src_dir/example.proto
+protoc -I=$src_dir \
+       --go_out=$dest_dir \
+       --go-vtproto_out=$dest_dir \
+       --go-vtproto_opt=features=size+marshal+unmarshal \
+       --go-ttrpc_out=$dest_dir \
+       $src_dir/example.proto
 go build

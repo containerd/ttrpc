@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	gproto "github.com/golang/protobuf/proto"
 )
 
 type Method func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error)
@@ -76,7 +77,7 @@ func (s *serviceSet) dispatch(ctx context.Context, serviceName, methodName strin
 
 	unmarshal := func(obj interface{}) error {
 		switch v := obj.(type) {
-		case protoMessage:
+		case gproto.Message:
 			if err := proto.Unmarshal(p, v); err != nil {
 				return status.Errorf(codes.Internal, "ttrpc: error unmarshalling payload: %v", err.Error())
 			}
@@ -100,7 +101,7 @@ func (s *serviceSet) dispatch(ctx context.Context, serviceName, methodName strin
 	}
 
 	switch v := resp.(type) {
-	case protoMessage:
+	case gproto.Message:
 		r, err := proto.Marshal(v)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "ttrpc: error marshaling payload: %v", err.Error())

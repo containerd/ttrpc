@@ -4,7 +4,9 @@ go 1.13
 
 require (
 	github.com/gogo/protobuf v1.3.2
+	github.com/golang/protobuf v1.5.2
 	github.com/pkg/errors v0.9.1
+	github.com/planetscale/vtprotobuf v0.2.0
 	github.com/prometheus/procfs v0.7.3
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/sys v0.0.0-20210820121016-41cdb8703e55
