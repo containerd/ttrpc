@@ -18,12 +18,12 @@ package ttrpc
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net"
 	"reflect"
 	"testing"
 
-	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -56,7 +56,7 @@ func TestReadWriteMessage(t *testing.T) {
 	for {
 		_, p, err := rch.recv()
 		if err != nil {
-			if errors.Cause(err) != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				t.Fatal(err)
 			}
 
