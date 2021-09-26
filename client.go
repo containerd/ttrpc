@@ -18,6 +18,7 @@ package ttrpc
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -27,7 +28,6 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -347,7 +347,7 @@ func filterCloseErr(err error) error {
 		return nil
 	case err == io.EOF:
 		return ErrClosed
-	case errors.Cause(err) == io.EOF:
+	case errors.Is(err, io.EOF):
 		return ErrClosed
 	case strings.Contains(err.Error(), "use of closed network connection"):
 		return ErrClosed

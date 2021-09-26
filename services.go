@@ -18,13 +18,14 @@ package ttrpc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
 	"unsafe"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -51,7 +52,7 @@ func newServiceSet(interceptor UnaryServerInterceptor) *serviceSet {
 
 func (s *serviceSet) register(name string, methods map[string]Method) {
 	if _, ok := s.services[name]; ok {
-		panic(errors.Errorf("duplicate service %v registered", name))
+		panic(fmt.Errorf("duplicate service %v registered", name))
 	}
 
 	s.services[name] = ServiceDesc{
