@@ -75,3 +75,55 @@ jobs:
     - name: Codecov
       run: bash <(curl -s https://codecov.io/bash)
       working-directory: src/github.com/containerd/ttrpc
+
+  protobuild:
+    name: Run Protobuild
+    runs-on: ubuntu-20.04
+    timeout-minutes: 5
+    steps:
+
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.17
+      id: go
+
+    - name: Setup Go binary path
+      shell: bash
+      run: |
+        echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
+        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+
+    - name: Check out code
+      uses: actions/checkout@v2
+      with:
+        path: src/github.com/containerd/ttrpc
+        fetch-depth: 25
+
+    - name: Install protoc
+      run: |
+        curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v3.5.0/protoc-3.5.0-linux-x86_64.zip
+        sudo unzip -x protoc-3.5.0-linux-x86_64.zip -d /usr/local
+        sudo chmod -R go+rX /usr/local/include
+        sudo chmod go+x /usr/local/bin/protoc
+
+    - name: Install gogo/protobuf
+      run: |
+        cd $GOPATH/src
+        mkdir -p github.com/gogo
+        cd github.com/gogo
+        git clone --depth 1 --branch v1.3.2 https://github.com/gogo/protobuf
+
+    - name: Build protoc-gen-gogottrpc
+      working-directory: src/github.com/containerd/ttrpc
+      run: |
+        go build ./cmd/protoc-gen-gogottrpc
+
+    - name: Run Protobuild
+      working-directory: src/github.com/containerd/ttrpc
+      run: |
+        export PATH=$GOPATH/bin:$PWD:$PATH
+        go install github.com/containerd/protobuild@7e5ee24bc1f70e9e289fef15e2631eb3491320bf
+        cd example
+        protobuild
+        git diff --exit-code
