@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -372,18 +371,9 @@ func TestClientEOF(t *testing.T) {
 	if err := client.Call(ctx, serviceName, "Test", tp, tp); err == nil {
 		t.Fatalf("expected error when calling against shutdown server")
 	} else if !errors.Is(err, ErrClosed) {
-		errno, ok := err.(syscall.Errno)
-		if ok {
+		var errno syscall.Errno
+		if errors.As(err, &errno) {
 			t.Logf("errno=%d", errno)
-		} else {
-			var oerr *net.OpError
-			if errors.As(err, &oerr) {
-				serr, sok := oerr.Err.(*os.SyscallError)
-				if sok {
-					t.Logf("Op=%q, syscall=%s, Err=%v", oerr.Op, serr.Syscall, serr.Err)
-				}
-			}
-			t.Logf("error %q doesn't match syscall.Errno", err)
 		}
 
 		t.Fatalf("expected to have a cause of ErrClosed, got %v", err)
