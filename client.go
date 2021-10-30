@@ -42,7 +42,12 @@ type Client struct {
 	codec   codec
 	conn    net.Conn
 	channel *channel
-	calls   chan *callRequest
+
+	streamLock   sync.RWMutex
+	streams      map[streamID]*stream
+	nextStreamID streamID
+
+	sender sender
 
 	ctx    context.Context
 	closed func()
@@ -75,11 +80,14 @@ func WithUnaryClientInterceptor(i UnaryClientInterceptor) ClientOpts {
 
 func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
+	channel := newChannel(conn)
 	c := &Client{
 		codec:           codec{},
 		conn:            conn,
-		channel:         newChannel(conn),
-		calls:           make(chan *callRequest),
+		channel:         channel,
+		streams:         make(map[streamID]*stream),
+		nextStreamID:    1,
+		sender:          synchronizedSender(channel),
 		closed:          cancel,
 		ctx:             ctx,
 		userCloseFunc:   func() {},
@@ -93,13 +101,6 @@ func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
 
 	go c.run()
 	return c
-}
-
-type callRequest struct {
-	ctx  context.Context
-	req  *Request
-	resp *Response  // response will be written back here
-	errs chan error // error written here on completion
 }
 
 func (c *Client) Call(ctx context.Context, service, method string, req, resp interface{}) error {
@@ -144,35 +145,50 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 }
 
 func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response) error {
-	errs := make(chan error, 1)
-	call := &callRequest{
-		ctx:  ctx,
-		req:  req,
-		resp: resp,
-		errs: errs,
+	p, err := c.codec.Marshal(req)
+	if err != nil {
+		return err
 	}
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case c.calls <- call:
-	case <-c.ctx.Done():
-		return c.error()
+	s, err := c.createStream()
+	if err != nil {
+		return err
 	}
+	defer c.deleteStream(s)
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-errs:
+	err = s.send(messageTypeRequest, p)
+	if err != nil {
 		return filterCloseErr(err)
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
 	case <-c.ctx.Done():
-		return c.error()
+		return ErrClosed
+	case msg, ok := <-s.recv:
+		if !ok {
+			return s.recvErr
+		}
+
+		if msg.header.Type == messageTypeResponse {
+			err = proto.Unmarshal(msg.payload[:msg.header.Length], resp)
+		} else {
+			err = errors.New("unknown message type received")
+		}
+
+		// return the payload buffer for reuse
+		c.channel.putmbuf(msg.payload)
+
+		return err
 	}
 }
 
 func (c *Client) Close() error {
 	c.closeOnce.Do(func() {
 		c.closed()
+
+		c.conn.Close()
 	})
 	return nil
 }
@@ -188,194 +204,95 @@ func (c *Client) UserOnCloseWait(ctx context.Context) error {
 	}
 }
 
-type message struct {
-	messageHeader
-	p   []byte
-	err error
-}
-
-// callMap provides access to a map of active calls, guarded by a mutex.
-type callMap struct {
-	m           sync.Mutex
-	activeCalls map[uint32]*callRequest
-	closeErr    error
-}
-
-// newCallMap returns a new callMap with an empty set of active calls.
-func newCallMap() *callMap {
-	return &callMap{
-		activeCalls: make(map[uint32]*callRequest),
-	}
-}
-
-// set adds a call entry to the map with the given streamID key.
-func (cm *callMap) set(streamID uint32, cr *callRequest) error {
-	cm.m.Lock()
-	defer cm.m.Unlock()
-	if cm.closeErr != nil {
-		return cm.closeErr
-	}
-	cm.activeCalls[streamID] = cr
-	return nil
-}
-
-// get looks up the call entry for the given streamID key, then removes it
-// from the map and returns it.
-func (cm *callMap) get(streamID uint32) (cr *callRequest, ok bool, err error) {
-	cm.m.Lock()
-	defer cm.m.Unlock()
-	if cm.closeErr != nil {
-		return nil, false, cm.closeErr
-	}
-	cr, ok = cm.activeCalls[streamID]
-	if ok {
-		delete(cm.activeCalls, streamID)
-	}
-	return
-}
-
-// abort sends the given error to each active call, and clears the map.
-// Once abort has been called, any subsequent calls to the callMap will return the error passed to abort.
-func (cm *callMap) abort(err error) error {
-	cm.m.Lock()
-	defer cm.m.Unlock()
-	if cm.closeErr != nil {
-		return cm.closeErr
-	}
-	for streamID, call := range cm.activeCalls {
-		call.errs <- err
-		delete(cm.activeCalls, streamID)
-	}
-	cm.closeErr = err
-	return nil
-}
-
 func (c *Client) run() {
-	var (
-		waiters      = newCallMap()
-		receiverDone = make(chan struct{})
-	)
+	err := c.receiveLoop()
+	c.Close()
+	c.cleanupStreams(err)
 
-	// Sender goroutine
-	// Receives calls from dispatch, adds them to the set of active calls, and sends them
-	// to the server.
-	go func() {
-		var streamID uint32 = 1
-		for {
-			select {
-			case <-c.ctx.Done():
-				return
-			case call := <-c.calls:
-				id := streamID
-				streamID += 2 // enforce odd client initiated request ids
-				if err := waiters.set(id, call); err != nil {
-					call.errs <- err // errs is buffered so should not block.
-					continue
-				}
-				if err := c.send(id, messageTypeRequest, call.req); err != nil {
-					call.errs <- err // errs is buffered so should not block.
-					waiters.get(id)  // remove from waiters set
-				}
-			}
-		}
-	}()
+	c.userCloseFunc()
+	close(c.userCloseWaitCh)
+}
 
-	// Receiver goroutine
-	// Receives responses from the server, looks up the call info in the set of active calls,
-	// and notifies the caller of the response.
-	go func() {
-		defer close(receiverDone)
-		for {
-			select {
-			case <-c.ctx.Done():
-				c.setError(c.ctx.Err())
-				return
-			default:
-				mh, p, err := c.channel.recv()
-				if err != nil {
-					_, ok := status.FromError(err)
-					if !ok {
-						// treat all errors that are not an rpc status as terminal.
-						// all others poison the connection.
-						c.setError(filterCloseErr(err))
-						return
-					}
-				}
-				msg := &message{
-					messageHeader: mh,
-					p:             p[:mh.Length],
-					err:           err,
-				}
-				call, ok, err := waiters.get(mh.StreamID)
-				if err != nil {
-					logrus.Errorf("ttrpc: failed to look up active call: %s", err)
-					continue
-				}
-				if !ok {
-					logrus.Errorf("ttrpc: received message for unknown channel %v", mh.StreamID)
-					continue
-				}
-				call.errs <- c.recv(call.resp, msg)
-			}
-		}
-	}()
-
-	defer func() {
-		c.conn.Close()
-		c.userCloseFunc()
-		close(c.userCloseWaitCh)
-	}()
-
+func (c *Client) receiveLoop() error {
 	for {
 		select {
-		case <-receiverDone:
-			// The receiver has exited.
-			// don't return out, let the close of the context trigger the abort of waiters
-			c.Close()
 		case <-c.ctx.Done():
-			// Abort all active calls. This will also prevent any new calls from being added
-			// to waiters.
-			waiters.abort(c.error())
-			return
+			return ErrClosed
+		default:
+			var (
+				msg = &streamMessage{}
+				err error
+			)
+
+			msg.header, msg.payload, err = c.channel.recv()
+			if err != nil {
+				_, ok := status.FromError(err)
+				if !ok {
+					// treat all errors that are not an rpc status as terminal.
+					// all others poison the connection.
+					return filterCloseErr(err)
+				}
+			}
+			sid := streamID(msg.header.StreamID)
+			s := c.getStream(sid)
+			if s == nil {
+				logrus.WithField("stream", sid).Errorf("ttrpc: received message on inactive stream")
+			}
+
+			if err != nil {
+				s.closeWithError(err)
+			} else {
+				if err := s.receive(c.ctx, msg); err != nil {
+					logrus.WithError(err).WithField("stream", sid).Errorf("ttrpc: failed to handle message")
+				}
+			}
 		}
 	}
 }
 
-func (c *Client) error() error {
-	c.errOnce.Do(func() {
-		if c.err == nil {
-			c.err = ErrClosed
-		}
-	})
-	return c.err
-}
+// createStream creates a new stream and registers it with the client
+// Introduce stream types for multiple or single response
+func (c *Client) createStream() (*stream, error) {
+	c.streamLock.Lock()
+	defer c.streamLock.Unlock()
 
-func (c *Client) setError(err error) {
-	c.errOnce.Do(func() {
-		c.err = err
-	})
-}
-
-func (c *Client) send(streamID uint32, mtype messageType, msg interface{}) error {
-	p, err := c.codec.Marshal(msg)
-	if err != nil {
-		return err
+	// Check if closed since lock acquired to prevent adding
+	// anything after cleanup completes
+	select {
+	case <-c.ctx.Done():
+		return nil, ErrClosed
+	default:
 	}
 
-	return c.channel.send(streamID, mtype, p)
+	s := newStream(c.nextStreamID, c.sender)
+	c.streams[s.id] = s
+	c.nextStreamID = c.nextStreamID + 2
+
+	return s, nil
 }
 
-func (c *Client) recv(resp *Response, msg *message) error {
-	if msg.err != nil {
-		return msg.err
-	}
+func (c *Client) deleteStream(s *stream) {
+	c.streamLock.Lock()
+	delete(c.streams, s.id)
+	c.streamLock.Unlock()
+	s.closeWithError(nil)
+}
 
-	if msg.Type != messageTypeResponse {
-		return errors.New("unknown message type received")
-	}
+func (c *Client) getStream(sid streamID) *stream {
+	c.streamLock.RLock()
+	s := c.streams[sid]
+	c.streamLock.RUnlock()
+	return s
+}
 
-	defer c.channel.putmbuf(msg.p)
-	return proto.Unmarshal(msg.p, resp)
+func (c *Client) cleanupStreams(err error) {
+	c.streamLock.Lock()
+	defer c.streamLock.Unlock()
+
+	for sid, s := range c.streams {
+		s.closeWithError(err)
+		delete(c.streams, sid)
+	}
 }
 
 // filterCloseErr rewrites EOF and EPIPE errors to ErrClosed. Use when
@@ -387,6 +304,8 @@ func filterCloseErr(err error) error {
 	case err == nil:
 		return nil
 	case err == io.EOF:
+		return ErrClosed
+	case errors.Is(err, io.ErrClosedPipe):
 		return ErrClosed
 	case errors.Is(err, io.EOF):
 		return ErrClosed
