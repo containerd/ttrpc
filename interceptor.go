@@ -41,7 +41,7 @@ type UnaryServerInterceptor func(context.Context, Unmarshaler, *UnaryServerInfo,
 // UnaryClientInterceptor specifies the interceptor function for client request/response
 type UnaryClientInterceptor func(context.Context, *Request, *Response, *UnaryClientInfo, Invoker) error
 
-func defaultServerInterceptor(ctx context.Context, unmarshal Unmarshaler, info *UnaryServerInfo, method Method) (interface{}, error) {
+func defaultServerInterceptor(ctx context.Context, unmarshal Unmarshaler, _ *UnaryServerInfo, method Method) (interface{}, error) {
 	return method(ctx, unmarshal)
 }
 

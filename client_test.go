@@ -62,7 +62,7 @@ func TestUserOnCloseWait(t *testing.T) {
 		t.Fatalf("expected error %v, but got %v", context.DeadlineExceeded, err)
 	}
 
-	_ = <-dataCh
+	<-dataCh
 
 	if err := client.UserOnCloseWait(ctx); err != nil {
 		t.Fatalf("expected error nil , but got %v", err)

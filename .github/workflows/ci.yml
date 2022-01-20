@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   #
   # golangci-lint
@@ -18,19 +22,19 @@ jobs:
     strategy:
       matrix:
         go-version: [1.17]
-        os: [ubuntu-18.04, macos-10.15, windows-2019]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      - uses: actions/setup-go@v2
-        with:
-          go-version: ${{ matrix.go-version }}
-
       - uses: actions/checkout@v2
-      - uses: golangci/golangci-lint-action@v2
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
         with:
-          version: v1.42.0
+          version: v1.43.0
           args: --timeout=5m
-          skip-go-installation: true
+          only-new-issues: true
+      - name: golangci-lint errors
+        run: golangci-lint run
+        if: ${{ failure() }}
 
   #
   # Project checks

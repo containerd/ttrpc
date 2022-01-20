@@ -123,16 +123,23 @@ func TestServer(t *testing.T) {
 	go server.Serve(ctx, listener)
 	defer server.Shutdown(ctx)
 
-	const calls = 2
-	results := make(chan callResult, 2)
-	go roundTrip(ctx, t, tclient, "bar", results)
-	go roundTrip(ctx, t, tclient, "baz", results)
+	testCases := []string{"bar", "baz"}
+	results := make(chan callResult, len(testCases))
+	for _, tc := range testCases {
+		go func(expected string) {
+			results <- roundTrip(ctx, tclient, expected)
+		}(tc)
+	}
 
-	for i := 0; i < calls; i++ {
+	for i := 0; i < len(testCases); {
 		result := <-results
-		if !reflect.DeepEqual(result.received, result.expected) {
-			t.Fatalf("unexpected response: %+#v != %+#v", result.received, result.expected)
+		if result.err != nil {
+			t.Fatalf("(%s): %v", result.name, result.err)
 		}
+		if !reflect.DeepEqual(result.received, result.expected) {
+			t.Fatalf("(%s): unexpected response: %+#v != %+#v", result.name, result.received, result.expected)
+		}
+		i++
 	}
 }
 
@@ -483,29 +490,34 @@ func checkServerShutdown(t *testing.T, server *Server) {
 }
 
 type callResult struct {
+	name     string
+	err      error
 	input    *testPayload
 	expected *testPayload
 	received *testPayload
 }
 
-func roundTrip(ctx context.Context, t *testing.T, client *testingClient, value string, results chan callResult) {
-	t.Helper()
+func roundTrip(ctx context.Context, client *testingClient, name string) callResult {
 	var (
 		tp = &testPayload{
-			Foo: "bar",
+			Foo: name,
 		}
 	)
 
-	ctx = WithMetadata(ctx, MD{"foo": []string{"bar"}})
+	ctx = WithMetadata(ctx, MD{"foo": []string{name}})
 
 	resp, err := client.Test(ctx, tp)
 	if err != nil {
-		t.Fatal(err)
+		return callResult{
+			name: name,
+			err:  err,
+		}
 	}
 
-	results <- callResult{
+	return callResult{
+		name:     name,
 		input:    tp,
-		expected: &testPayload{Foo: strings.Repeat(tp.Foo, 2), Metadata: "bar"},
+		expected: &testPayload{Foo: strings.Repeat(tp.Foo, 2), Metadata: name},
 		received: resp,
 	}
 }

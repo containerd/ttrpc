@@ -123,7 +123,7 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 	}
 
 	if dl, ok := ctx.Deadline(); ok {
-		creq.TimeoutNano = dl.Sub(time.Now()).Nanoseconds()
+		creq.TimeoutNano = time.Until(dl).Nanoseconds()
 	}
 
 	info := &UnaryClientInfo{
