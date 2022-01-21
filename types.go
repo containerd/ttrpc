@@ -51,8 +51,6 @@ func (r *StringList) Reset()         { *r = StringList{} }
 func (r *StringList) String() string { return fmt.Sprintf("%+#v", r) }
 func (r *StringList) ProtoMessage()  {}
 
-func makeStringList(item ...string) StringList { return StringList{List: item} }
-
 type KeyValue struct {
 	Key   string `protobuf:"bytes,1,opt,name=key,proto3"`
 	Value string `protobuf:"bytes,2,opt,name=value,proto3"`

@@ -6,29 +6,74 @@ on:
   pull_request:
     branches: [ main ]
 
-jobs:
+permissions:
+  contents: read
+  pull-requests: read
 
+jobs:
+  #
+  # golangci-lint
+  #
+  linters:
+    name: Linters
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+
+    strategy:
+      matrix:
+        go-version: [1.17]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          version: v1.43.0
+          args: --timeout=5m
+          only-new-issues: true
+      - name: golangci-lint errors
+        run: golangci-lint run
+        if: ${{ failure() }}
+
+  #
+  # Project checks
+  #
+  project:
+    name: Project Checks
+    runs-on: ubuntu-18.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.17'
+
+      - uses: actions/checkout@v2
+        with:
+          path: src/github.com/containerd/ttrpc
+          fetch-depth: 25
+
+      - uses: containerd/project-checks@v1
+        with:
+          working-directory: src/github.com/containerd/ttrpc
+
+  #
+  # Build and Test project
+  #
   build:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-18.04, macos-10.15]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 5
     steps:
 
-    - name: Set up Go 1.15
-      uses: actions/setup-go@v2
+    - uses: actions/setup-go@v2
       with:
-        go-version: 1.15
-      id: go
-
-    - name: Setup Go binary path
-      shell: bash
-      run: |
-        echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
-        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+        go-version: '1.17'
 
     - name: Check out code
       uses: actions/checkout@v2
@@ -36,46 +81,14 @@ jobs:
         path: src/github.com/containerd/ttrpc
         fetch-depth: 25
 
-    - name: Checkout project
-      uses: actions/checkout@v2
-      with:
-        repository: containerd/project
-        path: src/github.com/containerd/project
-
-    - name: Install dependencies
-      env:
-        GO111MODULE: off
-      run: |
-        go get -u github.com/vbatts/git-validation
-        go get -u github.com/kunalkushwaha/ltag
-
-    - name: Check DCO/whitespace/commit message
-      env:
-        GITHUB_COMMIT_URL: ${{ github.event.pull_request.commits_url }}
-        DCO_VERBOSITY: "-q"
-        DCO_RANGE: ""
-      working-directory: src/github.com/containerd/ttrpc
-      run: |
-        if [ -z "${GITHUB_COMMIT_URL}" ]; then
-          DCO_RANGE=$(jq -r '.before +".."+ .after' ${GITHUB_EVENT_PATH})
-        else
-          DCO_RANGE=$(curl ${GITHUB_COMMIT_URL} | jq -r '.[0].parents[0].sha +".."+ .[-1].sha')
-        fi
-        ../project/script/validate/dco
-
-    - name: Check file headers
-      run: ../project/script/validate/fileheader ../project/
-      working-directory: src/github.com/containerd/ttrpc
-
     - name: Test
       working-directory: src/github.com/containerd/ttrpc
       run: |
-        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        go test -v -race ./...
 
-    - name: Codecov
-      run: bash <(curl -s https://codecov.io/bash)
-      working-directory: src/github.com/containerd/ttrpc
-
+  #
+  # Run Protobuild
+  #
   protobuild:
     name: Run Protobuild
     runs-on: ubuntu-20.04
