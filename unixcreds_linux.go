@@ -50,7 +50,7 @@ func (fn UnixCredentialsFunc) Handshake(_ context.Context, conn net.Conn) (net.C
 	}
 
 	if ucredErr != nil {
-		return nil, nil, fmt.Errorf("ttrpc.UnixCredentialsFunc: failed to retrieve socket peer credentials: %w", err)
+		return nil, nil, fmt.Errorf("ttrpc.UnixCredentialsFunc: failed to retrieve socket peer credentials: %w", ucredErr)
 	}
 
 	if err := fn(ucred); err != nil {
