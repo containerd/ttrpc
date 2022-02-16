@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message Status {
+	int32 code = 1;
+}
