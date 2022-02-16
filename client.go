@@ -27,10 +27,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // ErrClosed is returned by client methods when the underlying connection is

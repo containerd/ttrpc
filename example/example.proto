@@ -3,7 +3,6 @@ syntax = "proto3";
 package ttrpc.example.v1;
 
 import "google/protobuf/empty.proto";
-import "gogoproto/gogo.proto";
 
 option go_package = "github.com/containerd/ttrpc/example;example";
 

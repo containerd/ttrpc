@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/containerd/ttrpc/internal"
 	"github.com/prometheus/procfs"
 )
 
@@ -41,7 +42,7 @@ func TestUnixSocketHandshake(t *testing.T) {
 
 	registerTestingService(server, &testingServer{})
 
-	var tp testPayload
+	var tp internal.TestPayload
 	// server shutdown, but we still make a call.
 	if err := client.Call(ctx, serviceName, "Test", &tp, &tp); err != nil {
 		t.Fatalf("unexpected error making call: %v", err)
@@ -70,7 +71,7 @@ func BenchmarkRoundTripUnixSocketCreds(b *testing.B) {
 	go server.Serve(ctx, listener)
 	defer server.Shutdown(ctx)
 
-	var tp testPayload
+	var tp internal.TestPayload
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -96,7 +97,7 @@ func TestServerEOF(t *testing.T) {
 
 	registerTestingService(server, &testingServer{})
 
-	tp := &testPayload{}
+	tp := &internal.TestPayload{}
 	// do a regular call
 	if err := client.Call(ctx, serviceName, "Test", tp, tp); err != nil {
 		t.Fatalf("unexpected error during test call: %v", err)

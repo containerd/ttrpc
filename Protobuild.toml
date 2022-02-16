@@ -1,12 +1,12 @@
 version = "2"
-generators = ["go", "go-ttrpc"]
+generators = ["go"]
 
 # Control protoc include paths. Below are usually some good defaults, but feel
 # free to try it without them if it works for your project.
 [includes]
   # Include paths that will be added before all others. Typically, you want to
   # treat the root of the project as an include, but this may not be necessary.
-  # before = ["./protobuf"]
+  before = ["."]
 
   # Paths that will be added untouched to the end of the includes. We use
   # `/usr/local/include` to pickup the common install location of protobuf.
@@ -16,4 +16,4 @@ generators = ["go", "go-ttrpc"]
 # This section maps protobuf imports to Go packages. These will become
 # `-M` directives in the call to the go protobuf generator.
 [packages]
-  "google/rpc/status.proto" = "github.com/containerd/containerd/protobuf/google/rpc"
+  "proto/status.proto" = "google.golang.org/genproto/googleapis/rpc/status"

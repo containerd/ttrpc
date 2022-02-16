@@ -120,23 +120,20 @@ jobs:
         sudo chmod -R go+rX /usr/local/include
         sudo chmod go+x /usr/local/bin/protoc
 
-    - name: Install gogo/protobuf
+    - name: Install protoc-gen-go
       run: |
-        cd $GOPATH/src
-        mkdir -p github.com/gogo
-        cd github.com/gogo
-        git clone --depth 1 --branch v1.3.2 https://github.com/gogo/protobuf
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.27.1
 
-    - name: Build protoc-gen-gogottrpc
+    - name: Build protoc-gen-go-ttrpc
       working-directory: src/github.com/containerd/ttrpc
       run: |
-        go build ./cmd/protoc-gen-gogottrpc
+        go build ./cmd/protoc-gen-go-ttrpc
 
     - name: Run Protobuild
       working-directory: src/github.com/containerd/ttrpc
       run: |
         export PATH=$GOPATH/bin:$PWD:$PATH
         go install github.com/containerd/protobuild@7e5ee24bc1f70e9e289fef15e2631eb3491320bf
-        cd example
         protobuild
+        (cd example && protobuild)
         git diff --exit-code

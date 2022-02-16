@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/containerd/ttrpc/internal"
 )
 
 func TestUserOnCloseWait(t *testing.T) {
@@ -46,7 +48,7 @@ func TestUserOnCloseWait(t *testing.T) {
 			}),
 		)
 
-		tp      testPayload
+		tp      internal.TestPayload
 		tclient = newTestingClient(client)
 	)
 

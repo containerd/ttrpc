@@ -25,9 +25,9 @@ import (
 	"path"
 	"unsafe"
 
-	"github.com/gogo/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 type Method func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error)
