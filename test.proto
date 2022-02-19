@@ -9,3 +9,8 @@ message TestPayload {
 	int64 deadline = 2;
 	string metadata = 3;
 }
+
+message EchoPayload {
+	int64 seq = 1;
+	string msg = 2;
+}
