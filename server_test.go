@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -369,6 +370,13 @@ func TestClientEOF(t *testing.T) {
 	if err := client.Call(ctx, serviceName, "Test", tp, tp); err == nil {
 		t.Fatalf("expected error when calling against shutdown server")
 	} else if !errors.Is(err, ErrClosed) {
+		errno, ok := err.(syscall.Errno)
+		if ok {
+			t.Logf("errno=%d", errno)
+		} else {
+			t.Logf("error %q doesn't match syscall.Errno", err)
+		}
+
 		t.Fatalf("expected to have a cause of ErrClosed, got %v", err)
 	}
 }
