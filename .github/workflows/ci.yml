@@ -84,7 +84,13 @@ jobs:
     - name: Test
       working-directory: src/github.com/containerd/ttrpc
       run: |
-        go test -v -race ./...
+        go test -v -race -coverprofile=coverage_txt -covermode=atomic ./...
+
+    - name: Code Coverage
+      uses: codecov/codecov-action@v2
+      with:
+        files: coverage_txt
+      if: matrix.os == 'ubuntu-latest'
 
   #
   # Run Protobuild
