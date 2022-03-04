@@ -33,7 +33,8 @@ GO_BUILDTAGS ?=
 GO_TAGS=$(if $(GO_BUILDTAGS),-tags "$(strip $(GO_BUILDTAGS))",)
 
 # Project packages.
-PACKAGES=$(shell $(GO) list ${GO_TAGS} ./... | grep -v /integration | grep -v /example)
+PACKAGES=$(shell $(GO) list ${GO_TAGS} ./... | grep -v /example)
+TESTPACKAGES=$(shell $(GO) list ${GO_TAGS} ./... | grep -v /cmd | grep -v /integration | grep -v /example)
 BINPACKAGES=$(addprefix ./cmd/,$(COMMANDS))
 
 #Replaces ":" (*nix), ";" (windows) with newline for easy parsing
@@ -56,7 +57,7 @@ TESTFLAGS_PARALLEL ?= 8
 # Use this to replace `go test` with, for instance, `gotestsum`
 GOTEST ?= $(GO) test
 
-.PHONY: clean all AUTHORS build binaries test integration generate protos checkprotos coverage ci check help install vendor install-deps
+.PHONY: clean all AUTHORS build binaries test integration generate protos checkprotos coverage ci check help install vendor install-protobuf install-protobuild
 .DEFAULT: default
 
 # Forcibly set the default goal to all, in case an include above brought in a rule definition.
@@ -106,11 +107,11 @@ build: ## build the go packages
 
 test: ## run tests, except integration tests and tests that require root
 	@echo "$(WHALE) $@"
-	@$(GOTEST) ${TESTFLAGS} ${PACKAGES}
+	@$(GOTEST) ${TESTFLAGS} ${TESTPACKAGES}
 
-#integration: ## run integration tests
-#	@echo "$(WHALE) $@"
-#	@cd "${ROOTDIR}/integration" && $(GO) mod download && $(GOTEST) -v ${TESTFLAGS}  -parallel ${TESTFLAGS_PARALLEL} .
+integration: ## run integration tests
+	@echo "$(WHALE) $@"
+	@cd "${ROOTDIR}/integration" && $(GOTEST) -v ${TESTFLAGS}  -parallel ${TESTFLAGS_PARALLEL} .
 
 benchmark: ## run benchmarks tests
 	@echo "$(WHALE) $@"
@@ -138,13 +139,19 @@ install: ## install binaries
 	@echo "$(WHALE) $@ $(BINPACKAGES)"
 	@$(GO) install $(BINPACKAGES)
 
-install-deps:
-	script/install-protobuf
+install-protobuf:
+	@echo "$(WHALE) $@"
+	@script/install-protobuf
+
+install-protobuild:
+	@echo "$(WHALE) $@"
+	@$(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@v1.27.1
+	@$(GO) install github.com/containerd/protobuild@7e5ee24bc1f70e9e289fef15e2631eb3491320bf
 
 coverage: ## generate coverprofiles from the unit tests, except tests that require root
 	@echo "$(WHALE) $@"
 	@rm -f coverage.txt
-	@$(GO) test -i ${TESTFLAGS} ${PACKAGES} 2> /dev/null
+	@$(GO) test -i ${TESTFLAGS} ${TESTPACKAGES} 2> /dev/null
 	@( for pkg in ${PACKAGES}; do \
 		$(GO) test ${TESTFLAGS} \
 			-cover \
