@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -375,6 +376,13 @@ func TestClientEOF(t *testing.T) {
 		if ok {
 			t.Logf("errno=%d", errno)
 		} else {
+			var oerr *net.OpError
+			if errors.As(err, &oerr) {
+				serr, sok := oerr.Err.(*os.SyscallError)
+				if sok {
+					t.Logf("Op=%q, syscall=%s, Err=%v", oerr.Op, serr.Syscall, serr.Err)
+				}
+			}
 			t.Logf("error %q doesn't match syscall.Errno", err)
 		}
 
