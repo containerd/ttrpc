@@ -1,0 +1,51 @@
+/*
+	Copyright The containerd Authors.
+
+	Licensed under the Apache License, Version 2.0 (the "License");
+	you may not use this file except in compliance with the License.
+	You may obtain a copy of the License at
+
+		http://www.apache.org/licenses/LICENSE-2.0
+
+	Unless required by applicable law or agreed to in writing, software
+	distributed under the License is distributed on an "AS IS" BASIS,
+	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	See the License for the specific language governing permissions and
+	limitations under the License.
+*/
+
+syntax = "proto3";
+
+package ttrpc.integration.streaming;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/containerd/ttrpc/integration/streaming;streaming";
+
+// Shim service is launched for each container and is responsible for owning the IO
+// for the container and its additional processes.  The shim is also the parent of
+// each container and allows reattaching to the IO and receiving the exit status
+// for the container processes.
+
+service Streaming {
+	rpc Echo(EchoPayload) returns (EchoPayload);
+	rpc EchoStream(stream EchoPayload) returns (stream EchoPayload);
+	rpc SumStream(stream Part) returns (Sum);
+	rpc DivideStream(Sum) returns (stream Part);
+	rpc EchoNull(stream EchoPayload) returns (google.protobuf.Empty);
+	rpc EchoNullStream(stream EchoPayload) returns (stream google.protobuf.Empty);
+}
+
+message EchoPayload {
+	uint32 seq = 1;
+	string msg = 2;
+}
+
+message Part {
+	int32 add = 1;
+}
+
+message Sum {
+	int32 sum = 1;
+	int32 num = 2;
+}

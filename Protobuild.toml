@@ -16,4 +16,11 @@ generators = ["go"]
 # This section maps protobuf imports to Go packages. These will become
 # `-M` directives in the call to the go protobuf generator.
 [packages]
+  "google/protobuf/any.proto" = "github.com/gogo/protobuf/types"
   "proto/status.proto" = "google.golang.org/genproto/googleapis/rpc/status"
+
+[[overrides]]
+# enable ttrpc and disable fieldpath and grpc for the shim
+prefixes = ["github.com/containerd/ttrpc/integration/streaming"]
+generators = ["go", "go-ttrpc"]
+plugins = ["ttrpc"]
