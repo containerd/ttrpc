@@ -84,12 +84,12 @@ jobs:
     - name: Test
       working-directory: src/github.com/containerd/ttrpc
       run: |
-        go test -v -race -coverprofile=coverage_txt -covermode=atomic ./...
+        make coverage TESTFLAGS_RACE=-race
 
     - name: Code Coverage
       uses: codecov/codecov-action@v2
       with:
-        files: coverage_txt
+        files: coverage.txt
       if: matrix.os == 'ubuntu-latest'
 
   #
@@ -119,27 +119,18 @@ jobs:
         path: src/github.com/containerd/ttrpc
         fetch-depth: 25
 
-    - name: Install protoc
-      run: |
-        curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v3.5.0/protoc-3.5.0-linux-x86_64.zip
-        sudo unzip -x protoc-3.5.0-linux-x86_64.zip -d /usr/local
-        sudo chmod -R go+rX /usr/local/include
-        sudo chmod go+x /usr/local/bin/protoc
-
-    - name: Install protoc-gen-go
-      run: |
-        go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.27.1
-
-    - name: Build protoc-gen-go-ttrpc
+    - name: Install dependencies
       working-directory: src/github.com/containerd/ttrpc
       run: |
-        go build ./cmd/protoc-gen-go-ttrpc
+        sudo make install-protobuf
+        make install-protobuild
+
+    - name: Install protoc-gen-go-ttrpc
+      working-directory: src/github.com/containerd/ttrpc
+      run: |
+        make install
 
     - name: Run Protobuild
       working-directory: src/github.com/containerd/ttrpc
       run: |
-        export PATH=$GOPATH/bin:$PWD:$PATH
-        go install github.com/containerd/protobuild@7e5ee24bc1f70e9e289fef15e2631eb3491320bf
-        protobuild
-        (cd example && protobuild)
-        git diff --exit-code
+        make check-protos
