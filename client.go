@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"syscall"
@@ -416,11 +415,9 @@ func filterCloseErr(err error) error {
 	default:
 		// if we have an epipe on a write or econnreset on a read , we cast to errclosed
 		var oerr *net.OpError
-		if errors.As(err, &oerr) && (oerr.Op == "write" || oerr.Op == "read") {
-			serr, sok := oerr.Err.(*os.SyscallError)
-			if sok && ((serr.Err == syscall.EPIPE && oerr.Op == "write") ||
-				(serr.Err == syscall.ECONNRESET && oerr.Op == "read")) {
-
+		if errors.As(err, &oerr) {
+			if (oerr.Op == "write" && errors.Is(err, syscall.EPIPE)) ||
+				(oerr.Op == "read" && errors.Is(err, syscall.ECONNRESET)) {
 				return ErrClosed
 			}
 		}
