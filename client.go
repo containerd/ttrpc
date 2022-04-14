@@ -29,6 +29,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -42,6 +43,7 @@ type Client struct {
 	codec   codec
 	conn    net.Conn
 	channel *channel
+	p       *peer.Peer
 
 	streamLock   sync.RWMutex
 	streams      map[streamID]*stream
@@ -83,6 +85,7 @@ func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
 		codec:           codec{},
 		conn:            conn,
 		channel:         channel,
+		p:               &peer.Peer{Addr: conn.RemoteAddr()},
 		streams:         make(map[streamID]*stream),
 		nextStreamID:    1,
 		closed:          cancel,
@@ -135,6 +138,7 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 	info := &UnaryClientInfo{
 		FullMethod: fullPath(service, method),
 	}
+	ctx = peer.NewContext(ctx, c.p)
 	if err := c.interceptor(ctx, creq, cresp, info, c.dispatch); err != nil {
 		return err
 	}

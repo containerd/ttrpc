@@ -28,6 +28,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -331,6 +332,8 @@ func (c *serverConn) run(sctx context.Context) {
 	defer cancel()
 	defer close(done)
 	defer c.server.delConnection(c)
+
+	ctx = peer.NewContext(ctx, &peer.Peer{Addr: c.conn.RemoteAddr()})
 
 	sendStatus := func(id uint32, st *status.Status) bool {
 		select {
