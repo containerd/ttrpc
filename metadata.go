@@ -62,6 +62,15 @@ func (m MD) Append(key string, values ...string) {
 	}
 }
 
+// Copy returns a copy of m.
+func (m MD) Copy() MD {
+	out := make(MD)
+	for k, v := range m {
+		out[k] = append(out[k], v...)
+	}
+	return out
+}
+
 func (m MD) setRequest(r *Request) {
 	for k, values := range m {
 		for _, v := range values {

@@ -94,6 +94,32 @@ func TestMetadataAppend(t *testing.T) {
 	}
 }
 
+func TestMetadataCopy(t *testing.T) {
+	// Fabricate a situation which guarantees that the slice's backing array
+	// will be mutated in-place if the slice is appended to, revealing if
+	// the copy is not a proper deep-copy.
+	metadata := MD{"foo": append(make([]string, 0, 10), "bar")}
+	mdcopy := metadata.Copy()
+	metadata.Append("foo", "baz")
+	mdcopy.Append("foo", "quux")
+
+	if list, ok := metadata.Get("foo"); !ok {
+		t.Error(`key "foo" not found in metadata`)
+	} else if l := len(list); l != 2 {
+		t.Errorf("unexpected number of values in metadata: want 2 got %d", l)
+	} else if v := list[1]; v != "baz" {
+		t.Errorf(`unexpected metadata value at 1: want "baz", got %q`, v)
+	}
+
+	if list, ok := mdcopy.Get("foo"); !ok {
+		t.Error(`key "foo" not found in mdcopy`)
+	} else if l := len(list); l != 2 {
+		t.Errorf("unexpected number of values in mdcopy: want 2, got %d", l)
+	} else if v := list[1]; v != "quux" {
+		t.Errorf(`unexpected mdcopy value at 1: want "quux", got %q`, v)
+	}
+}
+
 func TestMetadataContext(t *testing.T) {
 	metadata := make(MD)
 	metadata.Set("foo", "bar")
