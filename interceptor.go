@@ -28,6 +28,13 @@ type UnaryClientInfo struct {
 	FullMethod string
 }
 
+// StreamServerInfo provides information about the server request
+type StreamServerInfo struct {
+	FullMethod      string
+	StreamingClient bool
+	StreamingServer bool
+}
+
 // Unmarshaler contains the server request data and allows it to be unmarshaled
 // into a concrete type
 type Unmarshaler func(interface{}) error
@@ -48,3 +55,11 @@ func defaultServerInterceptor(ctx context.Context, unmarshal Unmarshaler, _ *Una
 func defaultClientInterceptor(ctx context.Context, req *Request, resp *Response, _ *UnaryClientInfo, invoker Invoker) error {
 	return invoker(ctx, req, resp)
 }
+
+type StreamServerInterceptor func(context.Context, StreamServer, *StreamServerInfo, StreamHandler) (interface{}, error)
+
+func defaultStreamServerInterceptor(ctx context.Context, ss StreamServer, _ *StreamServerInfo, stream StreamHandler) (interface{}, error) {
+	return stream(ctx, ss)
+}
+
+type StreamClientInterceptor func(context.Context)

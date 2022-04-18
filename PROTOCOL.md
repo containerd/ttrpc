@@ -95,11 +95,20 @@ client or server may send data. A data message is not allowed on a unary stream.
 A data message should not be sent after indicating `remote closed` to the peer.
 The last data message on a stream must set the `remote closed` flag.
 
+The `no data` flag is used to indicate that the data message does not include
+any data. This is normally used with the `remote closed` flag to indicate the
+stream is now closed without transmitting any data. Since ttrpc normally
+transmits a single object per message, a zero length data message may be
+interpreted as an empty object. For example, transmitting the number zero as a
+protobuf message ends up with a data length of zero, but the message is still
+considered data and should be processed.
+
 #### Data
 
 | Flag | Name            | Description                       |
 |------|-----------------|-----------------------------------|
 | 0x01 | `remote closed` | No more data expected from remote |
+| 0x04 | `no data`       | This message does not have data   |
 
 ## Streaming
 

@@ -86,6 +86,11 @@ jobs:
       run: |
         make coverage TESTFLAGS_RACE=-race
 
+    - name: Integration Tests
+      working-directory: src/github.com/containerd/ttrpc
+      run: |
+        make integration
+
     - name: Code Coverage
       uses: codecov/codecov-action@v2
       with:

@@ -44,7 +44,7 @@ func TestReadWriteMessage(t *testing.T) {
 
 	go func() {
 		for i, msg := range messages {
-			if err := ch.send(uint32(i), 1, msg); err != nil {
+			if err := ch.send(uint32(i), 1, 0, msg); err != nil {
 				errs <- err
 				return
 			}
@@ -96,7 +96,7 @@ func TestMessageOversize(t *testing.T) {
 	)
 
 	go func() {
-		if err := wch.send(1, 1, msg); err != nil {
+		if err := wch.send(1, 1, 0, msg); err != nil {
 			errs <- err
 		}
 	}()
