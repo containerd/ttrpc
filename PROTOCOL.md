@@ -103,7 +103,7 @@ interpreted as an empty object. For example, transmitting the number zero as a
 protobuf message ends up with a data length of zero, but the message is still
 considered data and should be processed.
 
-#### Data
+#### Data Flags
 
 | Flag | Name            | Description                       |
 |------|-----------------|-----------------------------------|
@@ -150,8 +150,8 @@ even after it has already completed sending data before the client.
              |              +----------+                    |
              |                                              |
 
-
 ### Non-Unary State Diagrams
+
 RC: `remote closed` flag
 RO: `remote open` flag
 
@@ -223,7 +223,7 @@ RO: `remote open` flag
              |               +-----------+                  |
              |                                              |
 
-# RPC
+## RPC
 
 While this protocol is defined primarily to support Remote Procedure Calls, the
 protocol does not define the request and response types beyond the messages
@@ -232,7 +232,7 @@ definition of request and response which may be used for cross language rpc.
 All implementations should at least define a request type which support
 routing by procedure name and a response type which supports call status.
 
-# Version History
+## Version History
 
 | Version | Features            |
 |---------|---------------------|
