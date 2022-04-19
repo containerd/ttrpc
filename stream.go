@@ -18,11 +18,8 @@ package ttrpc
 
 import (
 	"context"
-	"errors"
 	"sync"
 )
-
-var ErrStreamClosed = errors.New("ttrpc: stream closed")
 
 type streamID uint32
 

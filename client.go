@@ -33,10 +33,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ErrClosed is returned by client methods when the underlying connection is
-// closed.
-var ErrClosed = errors.New("ttrpc: closed")
-
 // Client for a ttrpc server
 type Client struct {
 	codec   codec

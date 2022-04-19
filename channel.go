@@ -19,7 +19,6 @@ package ttrpc
 import (
 	"bufio"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -60,8 +59,6 @@ const (
 	flagRemoteOpen   uint8 = 0x2
 	flagNoData       uint8 = 0x4
 )
-
-var ErrProtocol = errors.New("protocol error")
 
 // messageHeader represents the fixed-length message header of 10 bytes sent
 // with every request.
