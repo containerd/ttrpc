@@ -18,7 +18,6 @@ package ttrpc
 
 import (
 	"context"
-	"errors"
 	"io"
 	"math/rand"
 	"net"
@@ -29,10 +28,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-)
-
-var (
-	ErrServerClosed = errors.New("ttrpc: server closed")
 )
 
 type Server struct {
