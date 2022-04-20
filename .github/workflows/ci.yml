@@ -84,18 +84,17 @@ jobs:
     - name: Test
       working-directory: src/github.com/containerd/ttrpc
       run: |
+        make test
+
+    - name: Coverage
+      working-directory: src/github.com/containerd/ttrpc
+      run: |
         make coverage TESTFLAGS_RACE=-race
 
     - name: Integration Tests
       working-directory: src/github.com/containerd/ttrpc
       run: |
         make integration
-
-    - name: Code Coverage
-      uses: codecov/codecov-action@v2
-      with:
-        files: coverage.txt
-      if: matrix.os == 'ubuntu-latest'
 
   #
   # Run Protobuild
