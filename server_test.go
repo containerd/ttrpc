@@ -402,9 +402,11 @@ func TestServerRequestTimeout(t *testing.T) {
 		t.Fatalf("unexpected error making call: %v", err)
 	}
 
+	// The server implementation sets the context's deadline to result.Deadline.
+	// So the following condition should be true, even the host is really slow.
 	dl, _ := ctx.Deadline()
 	if result.Deadline != dl.UnixNano() {
-		t.Fatalf("expected deadline %v, actual: %v", dl, result.Deadline)
+		t.Fatalf("expected deadline %v, actual: %v", dl.UnixNano(), result.Deadline)
 	}
 }
 
