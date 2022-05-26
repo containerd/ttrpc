@@ -325,8 +325,8 @@ func TestOversizeCall(t *testing.T) {
 		t.Fatalf("expected error from non-existent service call")
 	} else if status, ok := status.FromError(err); !ok {
 		t.Fatalf("expected status present in error: %v", err)
-	} else if status.Code() != codes.ResourceExhausted {
-		t.Fatalf("expected code: %v != %v", status.Code(), codes.ResourceExhausted)
+	} else if status.Code() != codes.InvalidArgument {
+		t.Fatalf("expected code: %v != %v", status.Code(), codes.InvalidArgument)
 	}
 
 	if err := server.Shutdown(ctx); err != nil {
