@@ -40,7 +40,6 @@ directly, if required.
 - The client and server interface are identical whereas in GRPC there is a
   client and server interface that are different.
 - The Go stdlib context package is used instead.
-- No support for streams yet.
 
 # Status
 
