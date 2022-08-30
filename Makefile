@@ -145,8 +145,8 @@ install-protobuf:
 
 install-protobuild:
 	@echo "$(WHALE) $@"
-	@$(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@v1.27.1
-	@$(GO) install github.com/containerd/protobuild@7e5ee24bc1f70e9e289fef15e2631eb3491320bf
+	@$(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
+	@$(GO) install github.com/containerd/protobuild@14832ccc41429f5c4f81028e5af08aa233a219cf
 
 coverage: ## generate coverprofiles from the unit tests, except tests that require root
 	@echo "$(WHALE) $@"

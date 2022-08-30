@@ -33,13 +33,13 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 )
 
-func runService(ctx context.Context, t testing.TB, service streaming.StreamingService) (streaming.StreamingClient, func()) {
+func runService(ctx context.Context, t testing.TB, service streaming.TTRPCStreamingService) (streaming.TTRPCStreamingClient, func()) {
 	server, err := ttrpc.NewServer()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	streaming.RegisterStreamingService(server, service)
+	streaming.RegisterTTRPCStreamingService(server, service)
 
 	addr := t.Name() + ".sock"
 	if err := os.RemoveAll(addr); err != nil {
@@ -71,7 +71,7 @@ func runService(ctx context.Context, t testing.TB, service streaming.StreamingSe
 	}
 
 	client := ttrpc.NewClient(conn)
-	return streaming.NewStreamingClient(client), func() {
+	return streaming.NewTTRPCStreamingClient(client), func() {
 		client.Close()
 		server.Close()
 		conn.Close()
@@ -88,7 +88,7 @@ func (tss *testStreamingService) Echo(_ context.Context, e *streaming.EchoPayloa
 	return e, nil
 }
 
-func (tss *testStreamingService) EchoStream(_ context.Context, es streaming.Streaming_EchoStreamServer) error {
+func (tss *testStreamingService) EchoStream(_ context.Context, es streaming.TTRPCStreaming_EchoStreamServer) error {
 	for {
 		var e streaming.EchoPayload
 		if err := es.RecvMsg(&e); err != nil {
@@ -105,7 +105,7 @@ func (tss *testStreamingService) EchoStream(_ context.Context, es streaming.Stre
 	}
 }
 
-func (tss *testStreamingService) SumStream(_ context.Context, ss streaming.Streaming_SumStreamServer) (*streaming.Sum, error) {
+func (tss *testStreamingService) SumStream(_ context.Context, ss streaming.TTRPCStreaming_SumStreamServer) (*streaming.Sum, error) {
 	var sum streaming.Sum
 	for {
 		var part streaming.Part
@@ -122,7 +122,7 @@ func (tss *testStreamingService) SumStream(_ context.Context, ss streaming.Strea
 	return &sum, nil
 }
 
-func (tss *testStreamingService) DivideStream(_ context.Context, sum *streaming.Sum, ss streaming.Streaming_DivideStreamServer) error {
+func (tss *testStreamingService) DivideStream(_ context.Context, sum *streaming.Sum, ss streaming.TTRPCStreaming_DivideStreamServer) error {
 	parts := divideSum(sum)
 	for _, part := range parts {
 		if err := ss.Send(part); err != nil {
@@ -131,7 +131,7 @@ func (tss *testStreamingService) DivideStream(_ context.Context, sum *streaming.
 	}
 	return nil
 }
-func (tss *testStreamingService) EchoNull(_ context.Context, es streaming.Streaming_EchoNullServer) (*empty.Empty, error) {
+func (tss *testStreamingService) EchoNull(_ context.Context, es streaming.TTRPCStreaming_EchoNullServer) (*empty.Empty, error) {
 	msg := "non-empty empty"
 	for seq := uint32(0); ; seq++ {
 		var e streaming.EchoPayload
@@ -152,7 +152,7 @@ func (tss *testStreamingService) EchoNull(_ context.Context, es streaming.Stream
 	return &empty.Empty{}, nil
 }
 
-func (tss *testStreamingService) EchoNullStream(_ context.Context, es streaming.Streaming_EchoNullStreamServer) error {
+func (tss *testStreamingService) EchoNullStream(_ context.Context, es streaming.TTRPCStreaming_EchoNullStreamServer) error {
 	msg := "non-empty empty"
 	empty := &empty.Empty{}
 	var wg sync.WaitGroup
@@ -205,7 +205,7 @@ func TestStreamingService(t *testing.T) {
 	t.Run("EchoNullStream", echoNullStreamTest(ctx, client))
 }
 
-func echoTest(ctx context.Context, client streaming.StreamingClient) func(t *testing.T) {
+func echoTest(ctx context.Context, client streaming.TTRPCStreamingClient) func(t *testing.T) {
 	return func(t *testing.T) {
 		echo1 := &streaming.EchoPayload{
 			Seq: 1,
@@ -220,7 +220,7 @@ func echoTest(ctx context.Context, client streaming.StreamingClient) func(t *tes
 
 }
 
-func echoStreamTest(ctx context.Context, client streaming.StreamingClient) func(t *testing.T) {
+func echoStreamTest(ctx context.Context, client streaming.TTRPCStreamingClient) func(t *testing.T) {
 	return func(t *testing.T) {
 		stream, err := client.EchoStream(ctx)
 		if err != nil {
@@ -251,7 +251,7 @@ func echoStreamTest(ctx context.Context, client streaming.StreamingClient) func(
 	}
 }
 
-func sumStreamTest(ctx context.Context, client streaming.StreamingClient) func(t *testing.T) {
+func sumStreamTest(ctx context.Context, client streaming.TTRPCStreamingClient) func(t *testing.T) {
 	return func(t *testing.T) {
 		stream, err := client.SumStream(ctx)
 		if err != nil {
@@ -285,7 +285,7 @@ func sumStreamTest(ctx context.Context, client streaming.StreamingClient) func(t
 	}
 }
 
-func divideStreamTest(ctx context.Context, client streaming.StreamingClient) func(t *testing.T) {
+func divideStreamTest(ctx context.Context, client streaming.TTRPCStreamingClient) func(t *testing.T) {
 	return func(t *testing.T) {
 		expected := &streaming.Sum{
 			Sum: 392,
@@ -312,7 +312,7 @@ func divideStreamTest(ctx context.Context, client streaming.StreamingClient) fun
 		assertSum(t, &actual, expected)
 	}
 }
-func echoNullTest(ctx context.Context, client streaming.StreamingClient) func(t *testing.T) {
+func echoNullTest(ctx context.Context, client streaming.TTRPCStreamingClient) func(t *testing.T) {
 	return func(t *testing.T) {
 		stream, err := client.EchoNull(ctx)
 		if err != nil {
@@ -334,7 +334,7 @@ func echoNullTest(ctx context.Context, client streaming.StreamingClient) func(t 
 
 	}
 }
-func echoNullStreamTest(ctx context.Context, client streaming.StreamingClient) func(t *testing.T) {
+func echoNullStreamTest(ctx context.Context, client streaming.TTRPCStreamingClient) func(t *testing.T) {
 	return func(t *testing.T) {
 		stream, err := client.EchoNullStream(ctx)
 		if err != nil {

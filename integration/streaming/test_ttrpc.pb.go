@@ -5,33 +5,33 @@ package streaming
 import (
 	context "context"
 	ttrpc "github.com/containerd/ttrpc"
-	empty "github.com/golang/protobuf/ptypes/empty"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
-type StreamingService interface {
+type TTRPCStreamingService interface {
 	Echo(context.Context, *EchoPayload) (*EchoPayload, error)
-	EchoStream(context.Context, Streaming_EchoStreamServer) error
-	SumStream(context.Context, Streaming_SumStreamServer) (*Sum, error)
-	DivideStream(context.Context, *Sum, Streaming_DivideStreamServer) error
-	EchoNull(context.Context, Streaming_EchoNullServer) (*empty.Empty, error)
-	EchoNullStream(context.Context, Streaming_EchoNullStreamServer) error
+	EchoStream(context.Context, TTRPCStreaming_EchoStreamServer) error
+	SumStream(context.Context, TTRPCStreaming_SumStreamServer) (*Sum, error)
+	DivideStream(context.Context, *Sum, TTRPCStreaming_DivideStreamServer) error
+	EchoNull(context.Context, TTRPCStreaming_EchoNullServer) (*emptypb.Empty, error)
+	EchoNullStream(context.Context, TTRPCStreaming_EchoNullStreamServer) error
 }
 
-type Streaming_EchoStreamServer interface {
+type TTRPCStreaming_EchoStreamServer interface {
 	Send(*EchoPayload) error
 	Recv() (*EchoPayload, error)
 	ttrpc.StreamServer
 }
 
-type streamingEchoStreamServer struct {
+type ttrpcstreamingEchoStreamServer struct {
 	ttrpc.StreamServer
 }
 
-func (x *streamingEchoStreamServer) Send(m *EchoPayload) error {
+func (x *ttrpcstreamingEchoStreamServer) Send(m *EchoPayload) error {
 	return x.StreamServer.SendMsg(m)
 }
 
-func (x *streamingEchoStreamServer) Recv() (*EchoPayload, error) {
+func (x *ttrpcstreamingEchoStreamServer) Recv() (*EchoPayload, error) {
 	m := new(EchoPayload)
 	if err := x.StreamServer.RecvMsg(m); err != nil {
 		return nil, err
@@ -39,16 +39,16 @@ func (x *streamingEchoStreamServer) Recv() (*EchoPayload, error) {
 	return m, nil
 }
 
-type Streaming_SumStreamServer interface {
+type TTRPCStreaming_SumStreamServer interface {
 	Recv() (*Part, error)
 	ttrpc.StreamServer
 }
 
-type streamingSumStreamServer struct {
+type ttrpcstreamingSumStreamServer struct {
 	ttrpc.StreamServer
 }
 
-func (x *streamingSumStreamServer) Recv() (*Part, error) {
+func (x *ttrpcstreamingSumStreamServer) Recv() (*Part, error) {
 	m := new(Part)
 	if err := x.StreamServer.RecvMsg(m); err != nil {
 		return nil, err
@@ -56,29 +56,29 @@ func (x *streamingSumStreamServer) Recv() (*Part, error) {
 	return m, nil
 }
 
-type Streaming_DivideStreamServer interface {
+type TTRPCStreaming_DivideStreamServer interface {
 	Send(*Part) error
 	ttrpc.StreamServer
 }
 
-type streamingDivideStreamServer struct {
+type ttrpcstreamingDivideStreamServer struct {
 	ttrpc.StreamServer
 }
 
-func (x *streamingDivideStreamServer) Send(m *Part) error {
+func (x *ttrpcstreamingDivideStreamServer) Send(m *Part) error {
 	return x.StreamServer.SendMsg(m)
 }
 
-type Streaming_EchoNullServer interface {
+type TTRPCStreaming_EchoNullServer interface {
 	Recv() (*EchoPayload, error)
 	ttrpc.StreamServer
 }
 
-type streamingEchoNullServer struct {
+type ttrpcstreamingEchoNullServer struct {
 	ttrpc.StreamServer
 }
 
-func (x *streamingEchoNullServer) Recv() (*EchoPayload, error) {
+func (x *ttrpcstreamingEchoNullServer) Recv() (*EchoPayload, error) {
 	m := new(EchoPayload)
 	if err := x.StreamServer.RecvMsg(m); err != nil {
 		return nil, err
@@ -86,21 +86,21 @@ func (x *streamingEchoNullServer) Recv() (*EchoPayload, error) {
 	return m, nil
 }
 
-type Streaming_EchoNullStreamServer interface {
-	Send(*empty.Empty) error
+type TTRPCStreaming_EchoNullStreamServer interface {
+	Send(*emptypb.Empty) error
 	Recv() (*EchoPayload, error)
 	ttrpc.StreamServer
 }
 
-type streamingEchoNullStreamServer struct {
+type ttrpcstreamingEchoNullStreamServer struct {
 	ttrpc.StreamServer
 }
 
-func (x *streamingEchoNullStreamServer) Send(m *empty.Empty) error {
+func (x *ttrpcstreamingEchoNullStreamServer) Send(m *emptypb.Empty) error {
 	return x.StreamServer.SendMsg(m)
 }
 
-func (x *streamingEchoNullStreamServer) Recv() (*EchoPayload, error) {
+func (x *ttrpcstreamingEchoNullStreamServer) Recv() (*EchoPayload, error) {
 	m := new(EchoPayload)
 	if err := x.StreamServer.RecvMsg(m); err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (x *streamingEchoNullStreamServer) Recv() (*EchoPayload, error) {
 	return m, nil
 }
 
-func RegisterStreamingService(srv *ttrpc.Server, svc StreamingService) {
+func RegisterTTRPCStreamingService(srv *ttrpc.Server, svc TTRPCStreamingService) {
 	srv.RegisterService("ttrpc.integration.streaming.Streaming", &ttrpc.ServiceDesc{
 		Methods: map[string]ttrpc.Method{
 			"Echo": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
@@ -122,14 +122,14 @@ func RegisterStreamingService(srv *ttrpc.Server, svc StreamingService) {
 		Streams: map[string]ttrpc.Stream{
 			"EchoStream": {
 				Handler: func(ctx context.Context, stream ttrpc.StreamServer) (interface{}, error) {
-					return nil, svc.EchoStream(ctx, &streamingEchoStreamServer{stream})
+					return nil, svc.EchoStream(ctx, &ttrpcstreamingEchoStreamServer{stream})
 				},
 				StreamingClient: true,
 				StreamingServer: true,
 			},
 			"SumStream": {
 				Handler: func(ctx context.Context, stream ttrpc.StreamServer) (interface{}, error) {
-					return svc.SumStream(ctx, &streamingSumStreamServer{stream})
+					return svc.SumStream(ctx, &ttrpcstreamingSumStreamServer{stream})
 				},
 				StreamingClient: true,
 				StreamingServer: false,
@@ -140,21 +140,21 @@ func RegisterStreamingService(srv *ttrpc.Server, svc StreamingService) {
 					if err := stream.RecvMsg(m); err != nil {
 						return nil, err
 					}
-					return nil, svc.DivideStream(ctx, m, &streamingDivideStreamServer{stream})
+					return nil, svc.DivideStream(ctx, m, &ttrpcstreamingDivideStreamServer{stream})
 				},
 				StreamingClient: false,
 				StreamingServer: true,
 			},
 			"EchoNull": {
 				Handler: func(ctx context.Context, stream ttrpc.StreamServer) (interface{}, error) {
-					return svc.EchoNull(ctx, &streamingEchoNullServer{stream})
+					return svc.EchoNull(ctx, &ttrpcstreamingEchoNullServer{stream})
 				},
 				StreamingClient: true,
 				StreamingServer: false,
 			},
 			"EchoNullStream": {
 				Handler: func(ctx context.Context, stream ttrpc.StreamServer) (interface{}, error) {
-					return nil, svc.EchoNullStream(ctx, &streamingEchoNullStreamServer{stream})
+					return nil, svc.EchoNullStream(ctx, &ttrpcstreamingEchoNullStreamServer{stream})
 				},
 				StreamingClient: true,
 				StreamingServer: true,
@@ -163,26 +163,26 @@ func RegisterStreamingService(srv *ttrpc.Server, svc StreamingService) {
 	})
 }
 
-type StreamingClient interface {
+type TTRPCStreamingClient interface {
 	Echo(context.Context, *EchoPayload) (*EchoPayload, error)
-	EchoStream(context.Context) (Streaming_EchoStreamClient, error)
-	SumStream(context.Context) (Streaming_SumStreamClient, error)
-	DivideStream(context.Context, *Sum) (Streaming_DivideStreamClient, error)
-	EchoNull(context.Context) (Streaming_EchoNullClient, error)
-	EchoNullStream(context.Context) (Streaming_EchoNullStreamClient, error)
+	EchoStream(context.Context) (TTRPCStreaming_EchoStreamClient, error)
+	SumStream(context.Context) (TTRPCStreaming_SumStreamClient, error)
+	DivideStream(context.Context, *Sum) (TTRPCStreaming_DivideStreamClient, error)
+	EchoNull(context.Context) (TTRPCStreaming_EchoNullClient, error)
+	EchoNullStream(context.Context) (TTRPCStreaming_EchoNullStreamClient, error)
 }
 
-type streamingClient struct {
+type ttrpcstreamingClient struct {
 	client *ttrpc.Client
 }
 
-func NewStreamingClient(client *ttrpc.Client) StreamingClient {
-	return &streamingClient{
+func NewTTRPCStreamingClient(client *ttrpc.Client) TTRPCStreamingClient {
+	return &ttrpcstreamingClient{
 		client: client,
 	}
 }
 
-func (c *streamingClient) Echo(ctx context.Context, req *EchoPayload) (*EchoPayload, error) {
+func (c *ttrpcstreamingClient) Echo(ctx context.Context, req *EchoPayload) (*EchoPayload, error) {
 	var resp EchoPayload
 	if err := c.client.Call(ctx, "ttrpc.integration.streaming.Streaming", "Echo", req, &resp); err != nil {
 		return nil, err
@@ -190,7 +190,7 @@ func (c *streamingClient) Echo(ctx context.Context, req *EchoPayload) (*EchoPayl
 	return &resp, nil
 }
 
-func (c *streamingClient) EchoStream(ctx context.Context) (Streaming_EchoStreamClient, error) {
+func (c *ttrpcstreamingClient) EchoStream(ctx context.Context) (TTRPCStreaming_EchoStreamClient, error) {
 	stream, err := c.client.NewStream(ctx, &ttrpc.StreamDesc{
 		StreamingClient: true,
 		StreamingServer: true,
@@ -198,25 +198,25 @@ func (c *streamingClient) EchoStream(ctx context.Context) (Streaming_EchoStreamC
 	if err != nil {
 		return nil, err
 	}
-	x := &streamingEchoStreamClient{stream}
+	x := &ttrpcstreamingEchoStreamClient{stream}
 	return x, nil
 }
 
-type Streaming_EchoStreamClient interface {
+type TTRPCStreaming_EchoStreamClient interface {
 	Send(*EchoPayload) error
 	Recv() (*EchoPayload, error)
 	ttrpc.ClientStream
 }
 
-type streamingEchoStreamClient struct {
+type ttrpcstreamingEchoStreamClient struct {
 	ttrpc.ClientStream
 }
 
-func (x *streamingEchoStreamClient) Send(m *EchoPayload) error {
+func (x *ttrpcstreamingEchoStreamClient) Send(m *EchoPayload) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *streamingEchoStreamClient) Recv() (*EchoPayload, error) {
+func (x *ttrpcstreamingEchoStreamClient) Recv() (*EchoPayload, error) {
 	m := new(EchoPayload)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func (x *streamingEchoStreamClient) Recv() (*EchoPayload, error) {
 	return m, nil
 }
 
-func (c *streamingClient) SumStream(ctx context.Context) (Streaming_SumStreamClient, error) {
+func (c *ttrpcstreamingClient) SumStream(ctx context.Context) (TTRPCStreaming_SumStreamClient, error) {
 	stream, err := c.client.NewStream(ctx, &ttrpc.StreamDesc{
 		StreamingClient: true,
 		StreamingServer: false,
@@ -232,25 +232,25 @@ func (c *streamingClient) SumStream(ctx context.Context) (Streaming_SumStreamCli
 	if err != nil {
 		return nil, err
 	}
-	x := &streamingSumStreamClient{stream}
+	x := &ttrpcstreamingSumStreamClient{stream}
 	return x, nil
 }
 
-type Streaming_SumStreamClient interface {
+type TTRPCStreaming_SumStreamClient interface {
 	Send(*Part) error
 	CloseAndRecv() (*Sum, error)
 	ttrpc.ClientStream
 }
 
-type streamingSumStreamClient struct {
+type ttrpcstreamingSumStreamClient struct {
 	ttrpc.ClientStream
 }
 
-func (x *streamingSumStreamClient) Send(m *Part) error {
+func (x *ttrpcstreamingSumStreamClient) Send(m *Part) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *streamingSumStreamClient) CloseAndRecv() (*Sum, error) {
+func (x *ttrpcstreamingSumStreamClient) CloseAndRecv() (*Sum, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
@@ -261,7 +261,7 @@ func (x *streamingSumStreamClient) CloseAndRecv() (*Sum, error) {
 	return m, nil
 }
 
-func (c *streamingClient) DivideStream(ctx context.Context, req *Sum) (Streaming_DivideStreamClient, error) {
+func (c *ttrpcstreamingClient) DivideStream(ctx context.Context, req *Sum) (TTRPCStreaming_DivideStreamClient, error) {
 	stream, err := c.client.NewStream(ctx, &ttrpc.StreamDesc{
 		StreamingClient: false,
 		StreamingServer: true,
@@ -269,20 +269,20 @@ func (c *streamingClient) DivideStream(ctx context.Context, req *Sum) (Streaming
 	if err != nil {
 		return nil, err
 	}
-	x := &streamingDivideStreamClient{stream}
+	x := &ttrpcstreamingDivideStreamClient{stream}
 	return x, nil
 }
 
-type Streaming_DivideStreamClient interface {
+type TTRPCStreaming_DivideStreamClient interface {
 	Recv() (*Part, error)
 	ttrpc.ClientStream
 }
 
-type streamingDivideStreamClient struct {
+type ttrpcstreamingDivideStreamClient struct {
 	ttrpc.ClientStream
 }
 
-func (x *streamingDivideStreamClient) Recv() (*Part, error) {
+func (x *ttrpcstreamingDivideStreamClient) Recv() (*Part, error) {
 	m := new(Part)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -290,7 +290,7 @@ func (x *streamingDivideStreamClient) Recv() (*Part, error) {
 	return m, nil
 }
 
-func (c *streamingClient) EchoNull(ctx context.Context) (Streaming_EchoNullClient, error) {
+func (c *ttrpcstreamingClient) EchoNull(ctx context.Context) (TTRPCStreaming_EchoNullClient, error) {
 	stream, err := c.client.NewStream(ctx, &ttrpc.StreamDesc{
 		StreamingClient: true,
 		StreamingServer: false,
@@ -298,36 +298,36 @@ func (c *streamingClient) EchoNull(ctx context.Context) (Streaming_EchoNullClien
 	if err != nil {
 		return nil, err
 	}
-	x := &streamingEchoNullClient{stream}
+	x := &ttrpcstreamingEchoNullClient{stream}
 	return x, nil
 }
 
-type Streaming_EchoNullClient interface {
+type TTRPCStreaming_EchoNullClient interface {
 	Send(*EchoPayload) error
-	CloseAndRecv() (*empty.Empty, error)
+	CloseAndRecv() (*emptypb.Empty, error)
 	ttrpc.ClientStream
 }
 
-type streamingEchoNullClient struct {
+type ttrpcstreamingEchoNullClient struct {
 	ttrpc.ClientStream
 }
 
-func (x *streamingEchoNullClient) Send(m *EchoPayload) error {
+func (x *ttrpcstreamingEchoNullClient) Send(m *EchoPayload) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *streamingEchoNullClient) CloseAndRecv() (*empty.Empty, error) {
+func (x *ttrpcstreamingEchoNullClient) CloseAndRecv() (*emptypb.Empty, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
-	m := new(empty.Empty)
+	m := new(emptypb.Empty)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *streamingClient) EchoNullStream(ctx context.Context) (Streaming_EchoNullStreamClient, error) {
+func (c *ttrpcstreamingClient) EchoNullStream(ctx context.Context) (TTRPCStreaming_EchoNullStreamClient, error) {
 	stream, err := c.client.NewStream(ctx, &ttrpc.StreamDesc{
 		StreamingClient: true,
 		StreamingServer: true,
@@ -335,26 +335,26 @@ func (c *streamingClient) EchoNullStream(ctx context.Context) (Streaming_EchoNul
 	if err != nil {
 		return nil, err
 	}
-	x := &streamingEchoNullStreamClient{stream}
+	x := &ttrpcstreamingEchoNullStreamClient{stream}
 	return x, nil
 }
 
-type Streaming_EchoNullStreamClient interface {
+type TTRPCStreaming_EchoNullStreamClient interface {
 	Send(*EchoPayload) error
-	Recv() (*empty.Empty, error)
+	Recv() (*emptypb.Empty, error)
 	ttrpc.ClientStream
 }
 
-type streamingEchoNullStreamClient struct {
+type ttrpcstreamingEchoNullStreamClient struct {
 	ttrpc.ClientStream
 }
 
-func (x *streamingEchoNullStreamClient) Send(m *EchoPayload) error {
+func (x *ttrpcstreamingEchoNullStreamClient) Send(m *EchoPayload) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *streamingEchoNullStreamClient) Recv() (*empty.Empty, error) {
-	m := new(empty.Empty)
+func (x *ttrpcstreamingEchoNullStreamClient) Recv() (*emptypb.Empty, error) {
+	m := new(emptypb.Empty)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}

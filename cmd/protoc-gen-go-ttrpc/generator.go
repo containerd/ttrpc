@@ -90,7 +90,7 @@ func newGenerator(out *protogen.GeneratedFile) *generator {
 	return &gen
 }
 
-func generate(plugin *protogen.Plugin, input *protogen.File) error {
+func generate(plugin *protogen.Plugin, input *protogen.File, servicePrefix string) error {
 	if len(input.Services) == 0 {
 		// Only generate a Go file if the file has some services.
 		return nil
@@ -103,6 +103,7 @@ func generate(plugin *protogen.Plugin, input *protogen.File) error {
 
 	gen := newGenerator(file)
 	for _, service := range input.Services {
+		service.GoName = servicePrefix + service.GoName
 		gen.genService(service)
 	}
 	return nil
@@ -266,7 +267,7 @@ func (gen *generator) genService(service *protogen.Service) {
 		p.P()
 	}
 
-	clientStructType := strings.ToLower(clientType[:1]) + clientType[1:]
+	clientStructType := strings.ToLower(service.GoName) + "Client"
 	p.P("type ", clientStructType, " struct{")
 	p.P("client *", gen.ident.client)
 	p.P("}")
