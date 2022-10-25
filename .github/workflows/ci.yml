@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  GO_VERSION: 1.20.x
+
 permissions:
   contents: read
   pull-requests: read
@@ -21,19 +24,28 @@ jobs:
 
     strategy:
       matrix:
-        go-version: [1.17]
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          path: src/github.com/containerd/ttrpc
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.45.0
+          version: v1.51.2
           args: --timeout=5m
           skip-cache: true
+          working-directory: src/github.com/containerd/ttrpc
+
       - name: golangci-lint errors
         run: golangci-lint run
+        working-directory: src/github.com/containerd/ttrpc
         if: ${{ failure() }}
 
   #
@@ -41,20 +53,20 @@ jobs:
   #
   project:
     name: Project Checks
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
 
     steps:
-      - uses: actions/setup-go@v2
+      - uses: actions/setup-go@v3
         with:
-          go-version: '1.17'
+          go-version: ${{ env.GO_VERSION }}
 
       - uses: actions/checkout@v3
         with:
           path: src/github.com/containerd/ttrpc
           fetch-depth: 25
 
-      - uses: containerd/project-checks@v1
+      - uses: containerd/project-checks@v1.1.0
         with:
           working-directory: src/github.com/containerd/ttrpc
 
@@ -66,14 +78,16 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    name: ${{ matrix.os }}
+        go: [1.19.x, 1.20.x]
+
+    name: ${{ matrix.os }} / ${{ matrix.go }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 5
     steps:
 
-    - uses: actions/setup-go@v2
+    - uses: actions/setup-go@v3
       with:
-        go-version: '1.17'
+        go-version: ${{ matrix.go }}
 
     - name: Check out code
       uses: actions/checkout@v3
@@ -101,14 +115,13 @@ jobs:
   #
   protobuild:
     name: Run Protobuild
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
 
-    - name: Set up Go 1.17
-      uses: actions/setup-go@v2
+    - uses: actions/setup-go@v3
       with:
-        go-version: 1.17
+        go-version: ${{ env.GO_VERSION }}
       id: go
 
     - name: Setup Go binary path
