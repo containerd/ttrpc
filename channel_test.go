@@ -102,23 +102,22 @@ func TestMessageOversize(t *testing.T) {
 	}()
 
 	_, _, err := rch.recv()
-	if err == nil {
-		t.Fatalf("error expected reading with small buffer")
-	}
-
-	status, ok := status.FromError(err)
-	if !ok {
-		t.Fatalf("expected grpc status error: %v", err)
-	}
-
-	if status.Code() != codes.ResourceExhausted {
-		t.Fatalf("expected grpc status code: %v != %v", status.Code(), codes.ResourceExhausted)
+	if err != nil {
+		status, _ := status.FromError(err)
+		if status.Code() == codes.ResourceExhausted {
+			t.Fatalf("no error expected, oversize message should not be send.")
+		}
 	}
 
 	select {
 	case err := <-errs:
-		if err != nil {
-			t.Fatal(err)
+		status, ok := status.FromError(err)
+		if !ok {
+			t.Fatalf("expected grpc status error: %v", err)
+		}
+
+		if status.Code() != codes.ResourceExhausted {
+			t.Fatalf("expected grpc status code: %v != %v", status.Code(), codes.ResourceExhausted)
 		}
 	default:
 	}
