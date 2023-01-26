@@ -487,12 +487,23 @@ func checkServerShutdown(t *testing.T, server *Server) {
 	t.Helper()
 	server.mu.Lock()
 	defer server.mu.Unlock()
+
 	if len(server.listeners) > 0 {
-		t.Fatalf("expected listeners to be empty: %v", server.listeners)
+		t.Errorf("expected listeners to be empty: %v", server.listeners)
+	}
+	for listener := range server.listeners {
+		t.Logf("listener addr=%s", listener.Addr())
 	}
 
 	if len(server.connections) > 0 {
-		t.Fatalf("expected connections to be empty: %v", server.connections)
+		t.Errorf("expected connections to be empty: %v", server.connections)
+	}
+	for conn := range server.connections {
+		state, ok := conn.getState()
+		if !ok {
+			t.Errorf("failed to get state from %v", conn)
+		}
+		t.Logf("conn state=%s", state)
 	}
 }
 
