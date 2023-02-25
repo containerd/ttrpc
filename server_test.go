@@ -404,7 +404,7 @@ func TestServerRequestTimeout(t *testing.T) {
 
 	dl, _ := ctx.Deadline()
 	if result.Deadline != dl.UnixNano() {
-		t.Fatalf("expected deadline %v, actual: %v", dl, result.Deadline)
+		t.Fatalf("expected deadline %v, actual: %v", dl, time.Unix(0, result.Deadline))
 	}
 }
 
