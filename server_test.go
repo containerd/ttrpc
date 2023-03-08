@@ -201,20 +201,18 @@ func TestServerListenerClosed(t *testing.T) {
 func TestServerShutdown(t *testing.T) {
 	const ncalls = 5
 	var (
-		ctx                      = context.Background()
-		server                   = mustServer(t)(NewServer())
-		addr, listener           = newTestListener(t)
-		shutdownStarted          = make(chan struct{})
-		shutdownFinished         = make(chan struct{})
-		handlersStarted          = make(chan struct{})
-		handlersStartedCloseOnce sync.Once
-		proceed                  = make(chan struct{})
-		serveErrs                = make(chan error, 1)
-		callwg                   sync.WaitGroup
-		callErrs                 = make(chan error, ncalls)
-		shutdownErrs             = make(chan error, 1)
-		client, cleanup          = newTestClient(t, addr)
-		_, cleanup2              = newTestClient(t, addr) // secondary connection
+		ctx              = context.Background()
+		server           = mustServer(t)(NewServer())
+		addr, listener   = newTestListener(t)
+		shutdownStarted  = make(chan struct{})
+		shutdownFinished = make(chan struct{})
+		handlersStarted  sync.WaitGroup
+		proceed          = make(chan struct{})
+		serveErrs        = make(chan error, 1)
+		callErrs         = make(chan error, ncalls)
+		shutdownErrs     = make(chan error, 1)
+		client, cleanup  = newTestClient(t, addr)
+		_, cleanup2      = newTestClient(t, addr) // secondary connection
 	)
 	defer cleanup()
 	defer cleanup2()
@@ -227,7 +225,7 @@ func TestServerShutdown(t *testing.T) {
 				return nil, err
 			}
 
-			handlersStartedCloseOnce.Do(func() { close(handlersStarted) })
+			handlersStarted.Done()
 			<-proceed
 			return &internal.TestPayload{Foo: "waited"}, nil
 		},
@@ -238,20 +236,18 @@ func TestServerShutdown(t *testing.T) {
 	}()
 
 	// send a series of requests that will get blocked
-	for i := 0; i < 5; i++ {
-		callwg.Add(1)
+	for i := 0; i < ncalls; i++ {
+		handlersStarted.Add(1)
 		go func(i int) {
-			callwg.Done()
 			tp := internal.TestPayload{Foo: "half" + fmt.Sprint(i)}
 			callErrs <- client.Call(ctx, serviceName, "Test", &tp, &tp)
 		}(i)
 	}
 
-	<-handlersStarted
+	handlersStarted.Wait()
 	go func() {
 		close(shutdownStarted)
 		shutdownErrs <- server.Shutdown(ctx)
-		// server.Close()
 		close(shutdownFinished)
 	}()
 
