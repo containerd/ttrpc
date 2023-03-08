@@ -23,10 +23,8 @@ package otelttrpc
 // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/rpc.md
 import (
 	"context"
-	"fmt"
 	"net"
 	"strconv"
-	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
@@ -179,34 +177,6 @@ func setRequest(req *ttrpc.Request, md *ttrpc.MD) {
 				Value: v,
 			})
 		}
-	}
-}
-
-// clientSpanInfo returns a span name and all appropriate attributes from
-// the ttrpc request
-func clientSpanInfo(req *ttrpc.Request) (string, []attribute.KeyValue) {
-	return fmt.Sprintf("%s/%s", req.Service, req.Method), []attribute.KeyValue{
-		semconv.RPCServiceKey.String(req.Service),
-		semconv.RPCMethodKey.String(req.Method),
-		semconv.MessagingMessagePayloadSizeBytesKey.Int(len(req.Payload)),
-		RPCSystemTTRPC,
-	}
-}
-
-// serverSpanInfo returns a span name and all appropriate attributes from
-// the ttrpc request
-func serverSpanInfo(fullMethod string) (string, []attribute.KeyValue) {
-	name := strings.TrimLeft(fullMethod, "/")
-	parts := strings.SplitN(name, "/", 2)
-	if len(parts) != 2 {
-		// Invalid format, does not follow `/package.service/method`.
-		return name, []attribute.KeyValue(nil)
-	}
-
-	return name, []attribute.KeyValue{
-		semconv.RPCServiceKey.String(parts[0]),
-		semconv.RPCMethodKey.String(parts[1]),
-		RPCSystemTTRPC,
 	}
 }
 
