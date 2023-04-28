@@ -33,8 +33,8 @@ type stream struct {
 	sender sender
 	recv   chan *streamMessage
 
-	closeOnce sync.Once
-	recvErr   error
+	mut     sync.Mutex
+	recvErr error
 }
 
 func newStream(id streamID, send sender) *stream {
@@ -46,17 +46,17 @@ func newStream(id streamID, send sender) *stream {
 }
 
 func (s *stream) closeWithError(err error) error {
-	s.closeOnce.Do(func() {
-		if s.recv != nil {
-			close(s.recv)
-			if err != nil {
-				s.recvErr = err
-			} else {
-				s.recvErr = ErrClosed
-			}
+	s.mut.Lock()
+	defer s.mut.Unlock()
 
+	if s.recvErr == nil && s.recv != nil {
+		close(s.recv)
+		if err != nil {
+			s.recvErr = err
+		} else {
+			s.recvErr = ErrClosed
 		}
-	})
+	}
 	return nil
 }
 
@@ -65,6 +65,9 @@ func (s *stream) send(mt messageType, flags uint8, b []byte) error {
 }
 
 func (s *stream) receive(ctx context.Context, msg *streamMessage) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
 	if s.recvErr != nil {
 		return s.recvErr
 	}
