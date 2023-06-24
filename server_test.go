@@ -363,6 +363,8 @@ func TestClientEOF(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	client.UserOnCloseWait(ctx)
+
 	// server shutdown, but we still make a call.
 	if err := client.Call(ctx, serviceName, "Test", tp, tp); err == nil {
 		t.Fatalf("expected error when calling against shutdown server")
