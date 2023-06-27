@@ -36,6 +36,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: golangci-lint
+        id: lint-main
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.51.2
@@ -43,10 +44,24 @@ jobs:
           skip-cache: true
           working-directory: src/github.com/containerd/ttrpc
 
+      - name: golangci-lint for otelttrpc
+        id: lint-otelttrpc
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.51.2
+          args: --timeout=5m
+          skip-cache: true
+          working-directory: src/github.com/containerd/ttrpc/otelttrpc
+
       - name: golangci-lint errors
         run: golangci-lint run
         working-directory: src/github.com/containerd/ttrpc
-        if: ${{ failure() }}
+        if: ${{ failure() && steps.lint-main.conclusion == 'failure' }}
+
+      - name: golangci-lint errors for otelttrpc
+        run: golangci-lint run
+        working-directory: src/github.com/containerd/ttrpc/otelttrpc
+        if: ${{ failure() && steps.lint-otelttrpc.conclusion == 'failure' }}
 
   #
   # Project checks
