@@ -82,7 +82,7 @@ jobs:
 
     name: ${{ matrix.os }} / ${{ matrix.go }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
 
     - uses: actions/setup-go@v3
