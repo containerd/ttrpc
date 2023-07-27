@@ -286,7 +286,7 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// UserOnCloseWait is used to blocks untils the user's on-close callback
+// UserOnCloseWait is used to block until the user's on-close callback
 // finishes.
 func (c *Client) UserOnCloseWait(ctx context.Context) error {
 	select {
