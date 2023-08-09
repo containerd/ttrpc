@@ -41,6 +41,11 @@ directly, if required.
   client and server interface that are different.
 - The Go stdlib context package is used instead.
 
+# Instrumentation
+
+The [otelttrpc](otelttrpc) module implements OpenTracing instrumentation
+support for ttrpc.
+
 # Status
 
 TODO:
