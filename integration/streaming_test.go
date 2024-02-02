@@ -196,11 +196,7 @@ func (tss *testStreamingService) EmptyPayloadStream(_ context.Context, _ *emptyp
 		return err
 	}
 
-	if err := streamer.Send(&streaming.EchoPayload{Seq: 2}); err != nil {
-		return err
-	}
-
-	return nil
+	return streamer.Send(&streaming.EchoPayload{Seq: 2})
 }
 
 func TestStreamingService(t *testing.T) {
