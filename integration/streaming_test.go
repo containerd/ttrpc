@@ -420,9 +420,6 @@ func emptyPayloadStream(ctx context.Context, client streaming.TTRPCStreamingClie
 			}
 		}
 
-		if err := stream.CloseSend(); err != nil {
-			t.Fatal(err)
-		}
 		if _, err := stream.Recv(); err != io.EOF {
 			t.Fatalf("Expected io.EOF, got %v", err)
 		}

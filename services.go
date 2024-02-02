@@ -140,7 +140,7 @@ func (s *serviceSet) handle(ctx context.Context, req *Request, respond func(*sta
 			respond(st, p, stream.StreamingServer, true)
 		}()
 
-		if req.Payload != nil {
+		if req.Payload != nil || !info.StreamingClient {
 			unmarshal := func(obj interface{}) error {
 				return protoUnmarshal(req.Payload, obj)
 			}
