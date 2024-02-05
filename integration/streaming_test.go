@@ -31,6 +31,7 @@ import (
 	"github.com/containerd/ttrpc"
 	"github.com/containerd/ttrpc/integration/streaming"
 	"github.com/golang/protobuf/ptypes/empty"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func runService(ctx context.Context, t testing.TB, service streaming.TTRPCStreamingService) (streaming.TTRPCStreamingClient, func()) {
@@ -190,6 +191,14 @@ func (tss *testStreamingService) EchoNullStream(_ context.Context, es streaming.
 	return sendErr
 }
 
+func (tss *testStreamingService) EmptyPayloadStream(_ context.Context, _ *emptypb.Empty, streamer streaming.TTRPCStreaming_EmptyPayloadStreamServer) error {
+	if err := streamer.Send(&streaming.EchoPayload{Seq: 1}); err != nil {
+		return err
+	}
+
+	return streamer.Send(&streaming.EchoPayload{Seq: 2})
+}
+
 func TestStreamingService(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -203,6 +212,7 @@ func TestStreamingService(t *testing.T) {
 	t.Run("DivideStream", divideStreamTest(ctx, client))
 	t.Run("EchoNull", echoNullTest(ctx, client))
 	t.Run("EchoNullStream", echoNullStreamTest(ctx, client))
+	t.Run("EmptyPayloadStream", emptyPayloadStream(ctx, client))
 }
 
 func echoTest(ctx context.Context, client streaming.TTRPCStreamingClient) func(t *testing.T) {
@@ -382,6 +392,33 @@ func echoNullStreamTest(ctx context.Context, client streaming.TTRPCStreamingClie
 			t.Fatal("did not receive EOF within 10 seconds")
 		}
 
+	}
+}
+
+func emptyPayloadStream(ctx context.Context, client streaming.TTRPCStreamingClient) func(t *testing.T) {
+	return func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		stream, err := client.EmptyPayloadStream(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for i := uint32(1); i < 3; i++ {
+			first, err := stream.Recv()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if first.Seq != i {
+				t.Fatalf("unexpected seq: %d != %d", first.Seq, i)
+			}
+		}
+
+		if _, err := stream.Recv(); err != io.EOF {
+			t.Fatalf("Expected io.EOF, got %v", err)
+		}
 	}
 }
 
