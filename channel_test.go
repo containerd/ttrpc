@@ -24,8 +24,9 @@ import (
 	"reflect"
 	"testing"
 
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"google.golang.org/grpc/codes"
 )
 
 func TestReadWriteMessage(t *testing.T) {
@@ -89,37 +90,14 @@ func TestReadWriteMessage(t *testing.T) {
 
 func TestMessageOversize(t *testing.T) {
 	var (
-		w, r     = net.Pipe()
-		wch, rch = newChannel(w), newChannel(r)
-		msg      = bytes.Repeat([]byte("a message of massive length"), 512<<10)
-		errs     = make(chan error, 1)
+		w, _ = net.Pipe()
+		wch  = newChannel(w)
+		msg  = bytes.Repeat([]byte("a message of massive length"), 512<<10)
 	)
 
-	go func() {
-		if err := wch.send(1, 1, 0, msg); err != nil {
-			errs <- err
-		}
-	}()
+	err := wch.send(1, 1, 0, msg)
 
-	_, _, err := rch.recv()
-	if err == nil {
-		t.Fatalf("error expected reading with small buffer")
-	}
-
-	status, ok := status.FromError(err)
-	if !ok {
-		t.Fatalf("expected grpc status error: %v", err)
-	}
-
-	if status.Code() != codes.ResourceExhausted {
-		t.Fatalf("expected grpc status code: %v != %v", status.Code(), codes.ResourceExhausted)
-	}
-
-	select {
-	case err := <-errs:
-		if err != nil {
-			t.Fatal(err)
-		}
-	default:
+	if status.Convert(err).Code() != codes.InvalidArgument {
+		t.Fatalf("error expected while send a message of massive length")
 	}
 }
