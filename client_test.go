@@ -68,3 +68,35 @@ func TestUserOnCloseWait(t *testing.T) {
 		t.Fatalf("expected error nil , but got %v", err)
 	}
 }
+
+func TestClientReturnsErrClosedAfterClose(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	server := mustServer(t)(NewServer())
+	testService := &testingServer{}
+	addr, listener := newTestListener(t)
+
+	registerTestingService(server, testService)
+	go server.Serve(ctx, listener)
+
+	t.Cleanup(func() {
+		server.Shutdown(ctx)
+		listener.Close()
+		cancel()
+	})
+
+	client, cleanup := newTestClient(t, addr)
+	testClient := newTestingClient(client)
+
+	t.Cleanup(func() {
+		cleanup()
+	})
+
+	err := client.Close()
+	if err != nil {
+		t.Errorf("Expected nil error on client close, received %v", err)
+	}
+
+	if _, err := testClient.Test(ctx, &testPayload{}); err != ErrClosed {
+		t.Errorf("Expected ErrClosed after connection has been closed, got %v", err)
+	}
+}
