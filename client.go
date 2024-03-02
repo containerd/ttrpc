@@ -390,6 +390,8 @@ func filterCloseErr(err error) error {
 		return ErrClosed
 	case errors.Is(err, io.EOF):
 		return ErrClosed
+	case errors.Is(err, io.ErrClosedPipe):
+		return ErrClosed
 	case strings.Contains(err.Error(), "use of closed network connection"):
 		return ErrClosed
 	default:
