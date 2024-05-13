@@ -264,6 +264,7 @@ func (c *Client) run() {
 		for {
 			select {
 			case <-c.ctx.Done():
+				// The client has been closed, so the sender goroutine can now be stopped.
 				return
 			case call := <-c.calls:
 				id := streamID
@@ -288,7 +289,7 @@ func (c *Client) run() {
 		for {
 			select {
 			case <-c.ctx.Done():
-				c.setError(c.ctx.Err())
+				// The client has been closed, so the receiver goroutine can now be stopped.
 				return
 			default:
 				mh, p, err := c.channel.recv()
