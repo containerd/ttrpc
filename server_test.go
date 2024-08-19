@@ -318,7 +318,7 @@ func TestOversizeCall(t *testing.T) {
 		Foo: strings.Repeat("a", 1+messageLengthMax),
 	}
 	if err := client.Call(ctx, serviceName, "Test", tp, tp); err == nil {
-		t.Fatalf("expected error from non-existent service call")
+		t.Fatalf("expected error from oversized message")
 	} else if status, ok := status.FromError(err); !ok {
 		t.Fatalf("expected status present in error: %v", err)
 	} else if status.Code() != codes.ResourceExhausted {
