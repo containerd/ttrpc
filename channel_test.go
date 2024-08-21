@@ -89,21 +89,19 @@ func TestReadWriteMessage(t *testing.T) {
 
 func TestMessageOversize(t *testing.T) {
 	var (
-		w, r     = net.Pipe()
-		wch, rch = newChannel(w), newChannel(r)
-		msg      = bytes.Repeat([]byte("a message of massive length"), 512<<10)
-		errs     = make(chan error, 1)
+		w, _ = net.Pipe()
+		wch  = newChannel(w)
+		msg  = bytes.Repeat([]byte("a message of massive length"), 512<<10)
+		errs = make(chan error, 1)
 	)
 
 	go func() {
-		if err := wch.send(1, 1, 0, msg); err != nil {
-			errs <- err
-		}
+		errs <- wch.send(1, 1, 0, msg)
 	}()
 
-	_, _, err := rch.recv()
+	err := <-errs
 	if err == nil {
-		t.Fatalf("error expected reading with small buffer")
+		t.Fatalf("sending oversized message expected to fail")
 	}
 
 	status, ok := status.FromError(err)
@@ -113,13 +111,5 @@ func TestMessageOversize(t *testing.T) {
 
 	if status.Code() != codes.ResourceExhausted {
 		t.Fatalf("expected grpc status code: %v != %v", status.Code(), codes.ResourceExhausted)
-	}
-
-	select {
-	case err := <-errs:
-		if err != nil {
-			t.Fatal(err)
-		}
-	default:
 	}
 }
