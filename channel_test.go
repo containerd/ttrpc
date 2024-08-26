@@ -31,8 +31,8 @@ import (
 func TestReadWriteMessage(t *testing.T) {
 	var (
 		w, r     = net.Pipe()
-		ch       = newChannel(w)
-		rch      = newChannel(r)
+		ch       = newChannel(w, 0)
+		rch      = newChannel(r, 0)
 		messages = [][]byte{
 			[]byte("hello"),
 			[]byte("this is a test"),
@@ -90,7 +90,7 @@ func TestReadWriteMessage(t *testing.T) {
 func TestMessageOversize(t *testing.T) {
 	var (
 		w, _ = net.Pipe()
-		wch  = newChannel(w)
+		wch  = newChannel(w, 0)
 		msg  = bytes.Repeat([]byte("a message of massive length"), 512<<10)
 		errs = make(chan error, 1)
 	)
