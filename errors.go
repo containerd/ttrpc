@@ -18,6 +18,7 @@ package ttrpc
 
 import (
 	"errors"
+	"fmt"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -43,20 +44,59 @@ var (
 // length.
 type OversizedMessageErr struct {
 	messageLength int
+	maxLength     int
 	err           error
 }
 
+var (
+	oversizedMsgFmt     = "message length %d exceeds maximum message size of %d"
+	oversizedMsgScanFmt = fmt.Sprintf("%v", status.New(codes.ResourceExhausted, oversizedMsgFmt))
+)
+
 // OversizedMessageError returns an OversizedMessageErr error for the given message
 // length if it exceeds the allowed maximum. Otherwise a nil error is returned.
-func OversizedMessageError(messageLength int) error {
-	if messageLength <= messageLengthMax {
+func OversizedMessageError(messageLength, maxLength int) error {
+	if messageLength <= maxLength {
 		return nil
 	}
 
 	return &OversizedMessageErr{
 		messageLength: messageLength,
-		err:           status.Errorf(codes.ResourceExhausted, "message length %v exceed maximum message size of %v", messageLength, messageLengthMax),
+		maxLength:     maxLength,
+		err:           OversizedMessageStatus(messageLength, maxLength).Err(),
 	}
+}
+
+// OversizedMessageStatus returns a Status for an oversized message error.
+func OversizedMessageStatus(messageLength, maxLength int) *status.Status {
+	return status.Newf(codes.ResourceExhausted, oversizedMsgFmt, messageLength, maxLength)
+}
+
+// OversizedMessageFromError reconstructs an OversizedMessageErr from a Status.
+func OversizedMessageFromError(err error) (*OversizedMessageErr, bool) {
+	var (
+		messageLength int
+		maxLength     int
+	)
+
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.ResourceExhausted {
+		return nil, false
+	}
+
+	// TODO(klihub): might be too ugly to recover an error this way... An
+	// alternative would be to define our custom status detail proto type,
+	// then use status.WithDetails() and status.Details().
+
+	n, _ := fmt.Sscanf(st.Message(), oversizedMsgScanFmt, &messageLength, &maxLength)
+	if n != 2 {
+		n, _ = fmt.Sscanf(st.Message(), oversizedMsgFmt, &messageLength, &maxLength)
+	}
+	if n != 2 {
+		return nil, false
+	}
+
+	return OversizedMessageError(messageLength, maxLength).(*OversizedMessageErr), true
 }
 
 // Error returns the error message for the corresponding grpc Status for the error.
@@ -75,6 +115,6 @@ func (e *OversizedMessageErr) RejectedLength() int {
 }
 
 // MaximumLength retrieves the maximum allowed message length that triggered the error.
-func (*OversizedMessageErr) MaximumLength() int {
-	return messageLengthMax
+func (e *OversizedMessageErr) MaximumLength() int {
+	return e.maxLength
 }
