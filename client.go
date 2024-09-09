@@ -535,11 +535,12 @@ func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response) err
 		return err
 	}
 
-	s, err := c.createStream(0, p)
-	if err != nil {
-		return err
-	}
-	defer c.deleteStream(s)
+	var s *stream
+	ch := make(chan error)
+	go func() {
+		s, err = c.createStream(0, p)
+		ch <- err
+	}()
 
 	var msg *streamMessage
 	select {
@@ -547,14 +548,21 @@ func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response) err
 		return ctx.Err()
 	case <-c.ctx.Done():
 		return ErrClosed
-	case <-s.recvClose:
-		// If recv has a pending message, process that first
-		select {
-		case msg = <-s.recv:
-		default:
-			return s.recvErr
+	case err := <-ch:
+		defer c.deleteStream(s)
+		if err != nil {
+			return err
 		}
-	case msg = <-s.recv:
+		select {
+		case <-s.recvClose:
+			// If recv has a pending message, process that first
+			select {
+			case msg = <-s.recv:
+			default:
+				return s.recvErr
+			}
+		case msg = <-s.recv:
+		}
 	}
 
 	if msg.header.Type == messageTypeResponse {
