@@ -24,6 +24,7 @@ import (
 type serverConfig struct {
 	handshaker  Handshaker
 	interceptor UnaryServerInterceptor
+	maxMsgLen   int
 }
 
 // ServerOpt for configuring a ttrpc server
@@ -82,5 +83,14 @@ func chainUnaryServerInterceptors(info *UnaryServerInfo, method Method, intercep
 	return func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
 		return interceptors[0](ctx, unmarshal, info,
 			chainUnaryServerInterceptors(info, method, interceptors[1:]))
+	}
+}
+
+// WithServerWireMessageLimit sets the maximum allowed message length on the wire for the server.
+func WithServerWireMessageLimit(maxMsgLen int) ServerOpt {
+	maxMsgLen = clampWireMessageLimit(maxMsgLen)
+	return func(c *serverConfig) error {
+		c.maxMsgLen = maxMsgLen
+		return nil
 	}
 }

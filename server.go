@@ -74,8 +74,17 @@ func (s *Server) RegisterService(name string, desc *ServiceDesc) {
 }
 
 func (s *Server) Serve(ctx context.Context, l net.Listener) error {
-	s.addListener(l)
+	s.mu.Lock()
+	s.addListenerLocked(l)
 	defer s.closeListener(l)
+
+	select {
+	case <-s.done:
+		s.mu.Unlock()
+		return ErrServerClosed
+	default:
+	}
+	s.mu.Unlock()
 
 	var (
 		backoff    time.Duration
@@ -188,9 +197,7 @@ func (s *Server) Close() error {
 	return err
 }
 
-func (s *Server) addListener(l net.Listener) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Server) addListenerLocked(l net.Listener) {
 	s.listeners[l] = struct{}{}
 }
 
@@ -332,7 +339,7 @@ func (c *serverConn) run(sctx context.Context) {
 	)
 
 	var (
-		ch                     = newChannel(c.conn)
+		ch                     = newChannel(c.conn, c.server.config.maxMsgLen)
 		ctx, cancel            = context.WithCancel(sctx)
 		state        connState = connStateIdle
 		responses              = make(chan response)
@@ -364,6 +371,14 @@ func (c *serverConn) run(sctx context.Context) {
 		case <-done:
 			return false
 		}
+	}
+
+	isResourceExhaustedError := func(err error) (*status.Status, bool) {
+		st, ok := status.FromError(err)
+		if !ok || st.Code() != codes.ResourceExhausted {
+			return nil, false
+		}
+		return st, true
 	}
 
 	go func(recvErr chan error) {
@@ -518,6 +533,17 @@ func (c *serverConn) run(sctx context.Context) {
 				}
 
 				if err := ch.send(response.id, messageTypeResponse, 0, p); err != nil {
+					if st, ok := isResourceExhaustedError(err); ok {
+						p, err = c.server.codec.Marshal(&Response{
+							Status: st.Proto(),
+						})
+						if err != nil {
+							log.G(ctx).WithError(err).Error("failed marshaling error response")
+							return
+						}
+						ch.send(response.id, messageTypeResponse, 0, p)
+						return
+					}
 					log.G(ctx).WithError(err).Error("failed sending message on channel")
 					return
 				}
