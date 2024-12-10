@@ -66,7 +66,7 @@ func dumpMetadata(ctx context.Context) {
 	if !ok {
 		panic("no metadata")
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(md); err != nil {
+	if err := json.NewEncoder(os.Stdout).Encode(md.GetCopy()); err != nil {
 		panic(err)
 	}
 }
@@ -109,7 +109,7 @@ func client() error {
 	}
 
 	ctx := context.Background()
-	md := ttrpc.MD{}
+	md := ttrpc.NewMD(make(map[string][]string))
 	md.Set("name", "koye")
 	ctx = ttrpc.WithMetadata(ctx, md)
 

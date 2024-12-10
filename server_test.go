@@ -550,7 +550,7 @@ func roundTrip(ctx context.Context, client *testingClient, name string) callResu
 		}
 	)
 
-	ctx = WithMetadata(ctx, MD{"foo": []string{name}})
+	ctx = WithMetadata(ctx, NewMD(map[string][]string{"foo": {name}}))
 
 	resp, err := client.Test(ctx, tp)
 	if err != nil {

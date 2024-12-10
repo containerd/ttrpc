@@ -22,7 +22,7 @@ import (
 )
 
 func TestMetadataGet(t *testing.T) {
-	metadata := make(MD)
+	metadata := NewMD(make(map[string][]string))
 	metadata.Set("foo", "1", "2")
 
 	if list, ok := metadata.Get("foo"); !ok {
@@ -37,7 +37,7 @@ func TestMetadataGet(t *testing.T) {
 }
 
 func TestMetadataGetInvalidKey(t *testing.T) {
-	metadata := make(MD)
+	metadata := NewMD(make(map[string][]string))
 	metadata.Set("foo", "1", "2")
 
 	if _, ok := metadata.Get("invalid"); ok {
@@ -46,7 +46,7 @@ func TestMetadataGetInvalidKey(t *testing.T) {
 }
 
 func TestMetadataUnset(t *testing.T) {
-	metadata := make(MD)
+	metadata := NewMD(make(map[string][]string))
 	metadata.Set("foo", "1", "2")
 	metadata.Set("foo")
 
@@ -56,7 +56,7 @@ func TestMetadataUnset(t *testing.T) {
 }
 
 func TestMetadataReplace(t *testing.T) {
-	metadata := make(MD)
+	metadata := NewMD(make(map[string][]string))
 	metadata.Set("foo", "1", "2")
 	metadata.Set("foo", "3", "4")
 
@@ -72,7 +72,7 @@ func TestMetadataReplace(t *testing.T) {
 }
 
 func TestMetadataAppend(t *testing.T) {
-	metadata := make(MD)
+	metadata := NewMD(make(map[string][]string))
 	metadata.Set("foo", "1")
 	metadata.Append("foo", "2")
 	metadata.Append("bar", "3")
@@ -95,7 +95,7 @@ func TestMetadataAppend(t *testing.T) {
 }
 
 func TestMetadataContext(t *testing.T) {
-	metadata := make(MD)
+	metadata := NewMD(make(map[string][]string))
 	metadata.Set("foo", "bar")
 
 	ctx := WithMetadata(context.Background(), metadata)

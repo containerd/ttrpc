@@ -571,7 +571,7 @@ var noopFunc = func() {}
 
 func getRequestContext(ctx context.Context, req *Request) (retCtx context.Context, cancel func()) {
 	if len(req.Metadata) > 0 {
-		md := MD{}
+		md := NewMD(make(map[string][]string))
 		md.fromRequest(req)
 		ctx = WithMetadata(ctx, md)
 	}
