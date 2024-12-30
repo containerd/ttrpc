@@ -28,7 +28,7 @@ import (
 func TestUnaryClientInterceptor(t *testing.T) {
 	var (
 		intercepted = false
-		interceptor = func(ctx context.Context, req *Request, reply *Response, ci *UnaryClientInfo, i Invoker) error {
+		interceptor = func(ctx context.Context, req *Request, reply *Response, _ *UnaryClientInfo, i Invoker) error {
 			intercepted = true
 			return i(ctx, req, reply)
 		}
@@ -73,7 +73,7 @@ func TestChainUnaryClientInterceptor(t *testing.T) {
 		orderIdx  = 0
 		recorded  = []string{}
 		intercept = func(idx int, tag string) UnaryClientInterceptor {
-			return func(ctx context.Context, req *Request, reply *Response, ci *UnaryClientInfo, i Invoker) error {
+			return func(ctx context.Context, req *Request, reply *Response, _ *UnaryClientInfo, i Invoker) error {
 				if idx != orderIdx {
 					t.Fatalf("unexpected interceptor invocation order (%d != %d)", orderIdx, idx)
 				}

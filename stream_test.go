@@ -38,7 +38,7 @@ func TestStreamClient(t *testing.T) {
 
 	desc := &ServiceDesc{
 		Methods: map[string]Method{
-			"Echo": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
+			"Echo": func(_ context.Context, unmarshal func(interface{}) error) (interface{}, error) {
 				var req internal.EchoPayload
 				if err := unmarshal(&req); err != nil {
 					return nil, err
@@ -49,7 +49,7 @@ func TestStreamClient(t *testing.T) {
 		},
 		Streams: map[string]Stream{
 			"EchoStream": {
-				Handler: func(ctx context.Context, ss StreamServer) (interface{}, error) {
+				Handler: func(_ context.Context, ss StreamServer) (interface{}, error) {
 					for {
 						var req internal.EchoPayload
 						if err := ss.RecvMsg(&req); err != nil {

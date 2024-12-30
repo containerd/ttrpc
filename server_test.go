@@ -219,7 +219,7 @@ func TestServerShutdown(t *testing.T) {
 
 	// register a service that takes until we tell it to stop
 	server.Register(serviceName, map[string]Method{
-		"Test": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
+		"Test": func(_ context.Context, unmarshal func(interface{}) error) (interface{}, error) {
 			var req internal.TestPayload
 			if err := unmarshal(&req); err != nil {
 				return nil, err
