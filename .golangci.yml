@@ -6,7 +6,7 @@ linters:
     - goimports
     - revive
     - ineffassign
-    - vet
+    - govet
     - unused
     - misspell
   disable:
@@ -14,7 +14,7 @@ linters:
 
 linters-settings:
   revive:
-    ignore-generated-headers: true
+    ignore-generated-header: true
     rules:
       - name: blank-imports
       - name: context-as-argument
@@ -45,8 +45,8 @@ linters-settings:
 issues:
   include:
     - EXC0002
+  exclude-dirs:
+    - example
 
 run:
   timeout: 8m
-  skip-dirs:
-    - example
