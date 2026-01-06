@@ -111,6 +111,25 @@ func newChannel(conn net.Conn) *channel {
 	}
 }
 
+func batchDiscard(br *bufio.Reader, total int, batchSize int) (int, error) {
+	var discarded int
+	for discarded < total {
+		needDiscard := total - discarded
+		currentBatch := batchSize
+		if needDiscard < currentBatch {
+			currentBatch = needDiscard
+		}
+
+		n, err := br.Discard(currentBatch)
+		discarded += n
+
+		if err != nil {
+			return discarded, err
+		}
+	}
+	return discarded, nil
+}
+
 // recv a message from the channel. The returned buffer contains the message.
 //
 // If a valid grpc status is returned, the message header
@@ -124,7 +143,7 @@ func (ch *channel) recv() (messageHeader, []byte, error) {
 	}
 
 	if mh.Length > uint32(messageLengthMax) {
-		if _, err := ch.br.Discard(int(mh.Length)); err != nil {
+		if _, err := batchDiscard(ch.br, int(mh.Length), messageLengthMax); err != nil {
 			return mh, nil, fmt.Errorf("failed to discard after receiving oversized message: %w", err)
 		}
 
