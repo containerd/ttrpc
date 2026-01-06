@@ -113,9 +113,7 @@ func (s *Server) Serve(ctx context.Context, l net.Listener) error {
 					backoff *= 2
 				}
 
-				if max := time.Second; backoff > max {
-					backoff = max
-				}
+				backoff = min(time.Second, backoff)
 
 				sleep := time.Duration(rand.Int63n(int64(backoff)))
 				log.G(ctx).WithError(err).Errorf("ttrpc: failed accept; backoff %v", sleep)

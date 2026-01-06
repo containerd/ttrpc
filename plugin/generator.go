@@ -138,10 +138,10 @@ func (p *ttrpcGenerator) genService(fullName string, service *descriptor.Service
 }
 
 func (p *ttrpcGenerator) objectNamed(name string) generator.Object {
-	p.Generator.RecordTypeUse(name)
-	return p.Generator.ObjectNamed(name)
+	p.RecordTypeUse(name)
+	return p.ObjectNamed(name)
 }
 
 func (p *ttrpcGenerator) typeName(str string) string {
-	return p.Generator.TypeName(p.objectNamed(str))
+	return p.TypeName(p.objectNamed(str))
 }
