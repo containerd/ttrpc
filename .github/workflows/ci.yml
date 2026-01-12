@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  GO_VERSION: 1.23.x
-
 permissions:
   contents: read
   pull-requests: read
@@ -32,7 +29,7 @@ jobs:
           path: src/github.com/containerd/ttrpc
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: 'stable'
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
@@ -57,7 +54,7 @@ jobs:
           fetch-depth: 25
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: 'stable'
 
       - uses: containerd/project-checks@d7751f3c375b8fe4a84c02a068184ee4c1f59bc4 # v1.2.2
         with:
@@ -71,7 +68,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: [1.22.x, 1.23.x]
+        go: [oldstable, stable]
 
     name: ${{ matrix.os }} / ${{ matrix.go }}
     runs-on: ${{ matrix.os }}
@@ -116,7 +113,7 @@ jobs:
         fetch-depth: 25
     - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
       with:
-        go-version: ${{ env.GO_VERSION }}
+        go-version: 'stable'
       id: go
 
     - name: Setup Go binary path
