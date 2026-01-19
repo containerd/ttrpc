@@ -560,6 +560,7 @@ func (c *serverConn) run(sctx context.Context) {
 				return
 			}
 			log.G(ctx).WithError(err).Error("error receiving message")
+			return
 			// else, initiate shutdown
 		case <-shutdown:
 			return
