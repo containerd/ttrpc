@@ -413,6 +413,7 @@ func (c *serverConn) run(sctx context.Context) {
 					if !sendStatus(mh.StreamID, status.Newf(codes.InvalidArgument, "StreamID is no longer active")) {
 						return
 					}
+					continue
 				}
 				sh := i.(*streamHandler)
 				if mh.Flags&flagNoData != flagNoData {
@@ -426,6 +427,7 @@ func (c *serverConn) run(sctx context.Context) {
 						if !sendStatus(mh.StreamID, status.Newf(codes.InvalidArgument, "data handling error: %v", err)) {
 							return
 						}
+						continue
 					}
 				}
 
@@ -435,6 +437,7 @@ func (c *serverConn) run(sctx context.Context) {
 						if !sendStatus(mh.StreamID, status.Newf(codes.InvalidArgument, "data close message cannot include data")) {
 							return
 						}
+						continue
 					}
 				}
 			} else if mh.Type == messageTypeRequest {
