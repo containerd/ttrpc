@@ -99,10 +99,10 @@ jobs:
         make integration
 
   #
-  # Run Protobuild
+  # Run Buf
   #
-  protobuild:
-    name: Run Protobuild
+  buf:
+    name: Run Buf
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -116,24 +116,17 @@ jobs:
         go-version: 'stable'
       id: go
 
-    - name: Setup Go binary path
-      shell: bash
-      run: |
-        echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
-        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
-
-    - name: Install dependencies
-      working-directory: src/github.com/containerd/ttrpc
-      run: |
-        sudo make install-protobuf
-        make install-protobuild
+    - name: Install buf
+      uses: bufbuild/buf-action@v1
+      with:
+        setup_only: true
 
     - name: Install protoc-gen-go-ttrpc
       working-directory: src/github.com/containerd/ttrpc
       run: |
         make install
 
-    - name: Run Protobuild
+    - name: Check protos
       working-directory: src/github.com/containerd/ttrpc
       run: |
         make check-protos
