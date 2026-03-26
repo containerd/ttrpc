@@ -59,8 +59,8 @@ func (s *stream) closeWithError(err error) error {
 	return nil
 }
 
-func (s *stream) send(mt messageType, flags uint8, b []byte) error {
-	return s.sender.send(uint32(s.id), mt, flags, b)
+func (s *stream) send(ctx context.Context, mt messageType, flags uint8, b []byte) error {
+	return s.sender.send(ctx, uint32(s.id), mt, flags, b)
 }
 
 func (s *stream) receive(ctx context.Context, msg *streamMessage) error {
@@ -80,5 +80,5 @@ func (s *stream) receive(ctx context.Context, msg *streamMessage) error {
 }
 
 type sender interface {
-	send(uint32, messageType, uint8, []byte) error
+	send(context.Context, uint32, messageType, uint8, []byte) error
 }
