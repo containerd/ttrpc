@@ -18,6 +18,8 @@ package ttrpc
 
 import (
 	"context"
+	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -69,4 +71,60 @@ func TestUserOnCloseWait(t *testing.T) {
 	if err := client.UserOnCloseWait(ctx); err != nil {
 		t.Fatalf("expected error nil , but got %v", err)
 	}
+}
+
+func TestCallSendBlocked(t *testing.T) {
+	verifyCleanup := func(t *testing.T, client *Client) {
+		t.Helper()
+		client.streamLock.RLock()
+		streamsLen := len(client.streams)
+		client.streamLock.RUnlock()
+		if streamsLen != 0 {
+			t.Fatalf("expected no active streams after send failure, got %d", streamsLen)
+		}
+
+		waitCtx, waitCancel := context.WithTimeout(context.Background(), time.Second)
+		defer waitCancel()
+		if err := client.UserOnCloseWait(waitCtx); err != nil {
+			t.Fatalf("expected client to close after send failure, got %v", err)
+		}
+	}
+
+	t.Run("Timeout", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		client := NewClient(clientConn)
+		defer serverConn.Close()
+		defer client.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		err := client.Call(ctx, "service", "method", &internal.TestPayload{}, &internal.TestPayload{})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("expected error %v, got %v", context.DeadlineExceeded, err)
+		}
+
+		verifyCleanup(t, client)
+	})
+
+	t.Run("Cancel", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		client := NewClient(clientConn)
+		defer serverConn.Close()
+		defer client.Close()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			cancel()
+		}()
+
+		err := client.Call(ctx, "service", "method", &internal.TestPayload{}, &internal.TestPayload{})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected error %v, got %v", context.Canceled, err)
+		}
+
+		verifyCleanup(t, client)
+	})
 }
