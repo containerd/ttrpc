@@ -24,7 +24,7 @@ WHALE = "🇩"
 ONI = "👹"
 
 # Project binaries.
-COMMANDS=protoc-gen-go-ttrpc protoc-gen-gogottrpc
+COMMANDS=protoc-gen-go-ttrpc protoc-gen-gogottrpc ttrpc-stress
 
 ifdef BUILDTAGS
     GO_BUILDTAGS = ${BUILDTAGS}
