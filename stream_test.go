@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/containerd/ttrpc/internal"
 )
@@ -114,5 +115,61 @@ func TestStreamClient(t *testing.T) {
 	}
 	if err != io.EOF {
 		t.Fatalf("expected io.EOF after close send, got %v", err)
+	}
+}
+
+// TestStreamHandlerContextCancelOnReturn verifies that the context passed
+// to a stream handler is cancelled once the handler returns. Without this,
+// goroutines that the handler spawned and parked on `<-ctx.Done()` (for
+// example wrappers around RecvMsg) would only wake on connection close,
+// accumulating one leaked goroutine per completed stream.
+func TestStreamHandlerContextCancelOnReturn(t *testing.T) {
+	var (
+		ctx             = context.Background()
+		server          = mustServer(t)(NewServer())
+		addr, listener  = newTestListener(t)
+		client, cleanup = newTestClient(t, addr)
+		serviceName     = "streamCancelService"
+	)
+	defer listener.Close()
+	defer cleanup()
+
+	handlerCtx := make(chan context.Context, 1)
+	desc := &ServiceDesc{
+		Streams: map[string]Stream{
+			"Quick": {
+				Handler: func(hctx context.Context, _ StreamServer) (interface{}, error) {
+					handlerCtx <- hctx
+					return nil, nil
+				},
+				StreamingClient: true,
+				StreamingServer: true,
+			},
+		},
+	}
+	server.RegisterService(serviceName, desc)
+
+	go server.Serve(ctx, listener)
+	defer server.Shutdown(ctx)
+
+	stream, err := client.NewStream(ctx, &StreamDesc{StreamingClient: true, StreamingServer: true}, serviceName, "Quick", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.CloseSend()
+
+	var hctx context.Context
+	select {
+	case hctx = <-handlerCtx:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not run within 2s")
+	}
+
+	// After the handler returned, its per-stream ctx must be cancelled.
+	// Pre-fix this only happened on connection close.
+	select {
+	case <-hctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler ctx not cancelled after handler returned")
 	}
 }
