@@ -116,10 +116,16 @@ jobs:
         go-version: 'stable'
       id: go
 
+    - name: Read buf version
+      id: buf-version
+      working-directory: src/github.com/containerd/ttrpc
+      run: echo "version=$(cat script/buf-version)" >> $GITHUB_OUTPUT
+
     - name: Install buf
       uses: bufbuild/buf-action@v1
       with:
         setup_only: true
+        version: ${{ steps.buf-version.outputs.version }}
 
     - name: Install protoc-gen-go-ttrpc
       working-directory: src/github.com/containerd/ttrpc
