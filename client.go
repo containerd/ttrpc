@@ -135,10 +135,10 @@ func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
 	return c
 }
 
-func (c *Client) send(sid uint32, mt messageType, flags uint8, b []byte) error {
+func (c *Client) send(ctx context.Context, sid uint32, mt messageType, flags uint8, b []byte) error {
 	c.sendLock.Lock()
 	defer c.sendLock.Unlock()
-	return c.channel.send(sid, mt, flags, b)
+	return c.channel.send(ctx, sid, mt, flags, b)
 }
 
 // Call makes a unary request and returns with response
@@ -214,7 +214,7 @@ func (cs *clientStream) CloseSend() error {
 	if cs.localClosed {
 		return ErrStreamClosed
 	}
-	err := cs.s.send(messageTypeData, flagRemoteClosed|flagNoData, nil)
+	err := cs.s.send(cs.ctx, messageTypeData, flagRemoteClosed|flagNoData, nil)
 	if err != nil {
 		return filterCloseErr(err)
 	}
@@ -241,7 +241,7 @@ func (cs *clientStream) SendMsg(m interface{}) error {
 		}
 	}
 
-	err = cs.s.send(messageTypeData, 0, payload)
+	err = cs.s.send(cs.ctx, messageTypeData, 0, payload)
 	if err != nil {
 		return filterCloseErr(err)
 	}
@@ -384,9 +384,9 @@ func (c *Client) receiveLoop() error {
 	}
 }
 
-// createStream creates a new stream and registers it with the client
-// Introduce stream types for multiple or single response
-func (c *Client) createStream(flags uint8, b []byte) (*stream, error) {
+// createStreamWithContext creates a new stream and registers it with the client.
+// Introduce stream types for multiple or single response.
+func (c *Client) createStreamWithContext(ctx context.Context, flags uint8, b []byte) (*stream, error) {
 	// sendLock must be held across both allocation of the stream ID and sending it across the wire.
 	// This ensures that new stream IDs sent on the wire are always increasing, which is a
 	// requirement of the TTRPC protocol.
@@ -426,8 +426,12 @@ func (c *Client) createStream(flags uint8, b []byte) (*stream, error) {
 		return nil, err
 	}
 
-	if err := c.channel.send(uint32(s.id), messageTypeRequest, flags, b); err != nil {
-		return s, filterCloseErr(err)
+	if err := c.channel.send(ctx, uint32(s.id), messageTypeRequest, flags, b); err != nil {
+		c.streamLock.Lock()
+		delete(c.streams, s.id)
+		c.streamLock.Unlock()
+		s.closeWithError(err)
+		return nil, filterCloseErr(err)
 	}
 
 	return s, nil
@@ -517,7 +521,7 @@ func (c *Client) NewStream(ctx context.Context, desc *StreamDesc, service, metho
 	} else {
 		flags = flagRemoteClosed
 	}
-	s, err := c.createStream(flags, p)
+	s, err := c.createStreamWithContext(ctx, flags, p)
 	if err != nil {
 		return nil, err
 	}
@@ -536,7 +540,7 @@ func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response) err
 		return err
 	}
 
-	s, err := c.createStream(0, p)
+	s, err := c.createStreamWithContext(ctx, 0, p)
 	if err != nil {
 		return err
 	}

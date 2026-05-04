@@ -525,7 +525,7 @@ func (c *serverConn) run(sctx context.Context) {
 					return
 				}
 
-				if err := ch.send(response.id, messageTypeResponse, 0, p); err != nil {
+				if err := ch.send(ctx, response.id, messageTypeResponse, 0, p); err != nil {
 					log.G(ctx).WithError(err).Error("failed sending message on channel")
 					return
 				}
@@ -537,7 +537,7 @@ func (c *serverConn) run(sctx context.Context) {
 				if response.data == nil {
 					flags = flags | flagNoData
 				}
-				if err := ch.send(response.id, messageTypeData, flags, response.data); err != nil {
+				if err := ch.send(ctx, response.id, messageTypeData, flags, response.data); err != nil {
 					log.G(ctx).WithError(err).Error("failed sending message on channel")
 					return
 				}

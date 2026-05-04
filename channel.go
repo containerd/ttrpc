@@ -18,11 +18,14 @@ package ttrpc
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -142,23 +145,70 @@ func (ch *channel) recv() (messageHeader, []byte, error) {
 	return mh, p, nil
 }
 
-func (ch *channel) send(streamID uint32, t messageType, flags uint8, p []byte) error {
+func (ch *channel) send(ctx context.Context, streamID uint32, t messageType, flags uint8, p []byte) error {
 	if len(p) > messageLengthMax {
 		return OversizedMessageError(len(p))
 	}
 
-	if err := writeMessageHeader(ch.bw, ch.hwbuf[:], messageHeader{Length: uint32(len(p)), StreamID: streamID, Type: t, Flags: flags}); err != nil {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
+	if ctx.Done() != nil {
+		done := make(chan struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				ch.conn.SetWriteDeadline(time.Now())
+			case <-done:
+			}
+		}()
+		defer close(done)
+	}
+
+	defer ch.conn.SetWriteDeadline(time.Time{})
+
+	if err := writeMessageHeader(ch.bw, ch.hwbuf[:], messageHeader{Length: uint32(len(p)), StreamID: streamID, Type: t, Flags: flags}); err != nil {
+		return ch.failSend(ctx, err)
+	}
+
 	if len(p) > 0 {
-		_, err := ch.bw.Write(p)
-		if err != nil {
-			return err
+		if _, err := ch.bw.Write(p); err != nil {
+			return ch.failSend(ctx, err)
 		}
 	}
 
-	return ch.bw.Flush()
+	if err := ch.bw.Flush(); err != nil {
+		return ch.failSend(ctx, err)
+	}
+
+	return nil
+}
+
+func mapWriteTimeout(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+	}
+
+	return err
+}
+
+func (ch *channel) failSend(ctx context.Context, err error) error {
+	// Any write-side failure may leave buffered bytes in an indeterminate state.
+	// Close the connection so later sends cannot corrupt the framing stream.
+	_ = ch.conn.Close()
+	return mapWriteTimeout(ctx, err)
 }
 
 func (ch *channel) getmbuf(size int) []byte {

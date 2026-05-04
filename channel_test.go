@@ -18,6 +18,7 @@ package ttrpc
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -44,7 +45,7 @@ func TestReadWriteMessage(t *testing.T) {
 
 	go func() {
 		for i, msg := range messages {
-			if err := ch.send(uint32(i), 1, 0, msg); err != nil {
+			if err := ch.send(context.Background(), uint32(i), 1, 0, msg); err != nil {
 				errs <- err
 				return
 			}
@@ -96,7 +97,7 @@ func TestMessageOversize(t *testing.T) {
 	)
 
 	go func() {
-		errs <- wch.send(1, 1, 0, msg)
+		errs <- wch.send(context.Background(), 1, 1, 0, msg)
 	}()
 
 	err := <-errs
