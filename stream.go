@@ -29,6 +29,23 @@ type streamMessage struct {
 	payload []byte
 }
 
+// streamFullTimeout bounds how long the receive loop will wait for a stream's
+// recv buffer to drain before giving up. The fallback prevents a single
+// unconsumed stream from indefinitely blocking the connection-level receive
+// loop.
+//
+// Most buffer fillups in practice are abandoned streams (the caller dropped
+// the clientStream without consuming it), and those are handled faster by
+// the runtime.AddCleanup attached in NewStream than by waiting out this
+// timeout. Five seconds therefore primarily bounds head-of-line blocking
+// for the rarer "held but not consumed" case (a goroutine leak in the
+// caller), where neither the cleanup nor the contract that consumers
+// process immediately or hand off to a goroutine can help.
+//
+// Exposed as a var (rather than const) so tests can extend it to observe
+// the abandon-via-cleanup unblock path without racing the timeout.
+var streamFullTimeout = 5 * time.Second
+
 type stream struct {
 	id     streamID
 	sender sender
@@ -92,7 +109,7 @@ func (s *stream) receive(ctx context.Context, msg *streamMessage) error {
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Second):
+		case <-time.After(streamFullTimeout):
 			s.closeWithError(ErrStreamFull)
 			return ErrStreamFull
 		}
