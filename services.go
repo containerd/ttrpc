@@ -203,7 +203,7 @@ func (s *streamHandler) data(unmarshal Unmarshaler) error {
 			return nil
 		case <-s.ctx.Done():
 			return s.ctx.Err()
-		case <-time.After(time.Second):
+		case <-time.After(streamFullTimeout):
 			return ErrStreamFull
 		}
 	}
