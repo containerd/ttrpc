@@ -29,6 +29,13 @@ type streamMessage struct {
 	payload []byte
 }
 
+// streamFullTimeout bounds how long the receive loop will wait for a stream's
+// recv buffer to drain before giving up. The fallback prevents a single
+// unconsumed stream from indefinitely blocking the connection-level receive
+// loop. Exposed as a var (rather than const) so tests can extend it to
+// observe the abandon-via-cleanup unblock path without racing the timeout.
+var streamFullTimeout = time.Second
+
 type stream struct {
 	id     streamID
 	sender sender
@@ -92,7 +99,7 @@ func (s *stream) receive(ctx context.Context, msg *streamMessage) error {
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Second):
+		case <-time.After(streamFullTimeout):
 			s.closeWithError(ErrStreamFull)
 			return ErrStreamFull
 		}
