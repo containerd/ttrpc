@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -107,9 +108,18 @@ func chainUnaryInterceptors(interceptors []UnaryClientInterceptor, final Invoker
 	}
 }
 
-// NewClient creates a new ttrpc client using the given connection
+// NewClient creates a new ttrpc client using the given connection.
+// It is equivalent to [NewClientWithContext] with [context.Background] as
+// the parent context.
 func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
-	ctx, cancel := context.WithCancel(context.Background())
+	return NewClientWithContext(context.Background(), conn, opts...)
+}
+
+// NewClientWithContext creates a new ttrpc client using the given connection,
+// deriving the client's internal context from ctx. Cancellation of ctx
+// shuts the client down; the client's own Close does not cancel ctx.
+func NewClientWithContext(ctx context.Context, conn net.Conn, opts ...ClientOpts) *Client {
+	ctx, cancel := context.WithCancel(ctx)
 	channel := newChannel(conn)
 	c := &Client{
 		codec:           codec{},
@@ -434,10 +444,22 @@ func (c *Client) createStream(flags uint8, b []byte, recvBuf int) (*stream, erro
 }
 
 func (c *Client) deleteStream(s *stream) {
+	c.deleteStreamWithError(s, nil)
+}
+
+// deleteStreamWithError removes the stream from the client and closes it,
+// propagating the supplied error to anyone still observing the stream via
+// receive (the connection read loop) or RecvMsg. A nil error closes the
+// stream with the default ErrClosed.
+//
+// The stream is closed before being removed from the map so that any
+// in-flight message dispatch in the read loop observes recvErr through the
+// normal receive path rather than falling through to "inactive stream".
+func (c *Client) deleteStreamWithError(s *stream, err error) {
+	s.closeWithError(err)
 	c.streamLock.Lock()
 	delete(c.streams, s.id)
 	c.streamLock.Unlock()
-	s.closeWithError(nil)
 }
 
 func (c *Client) getStream(sid streamID) *stream {
@@ -522,12 +544,46 @@ func (c *Client) NewStream(ctx context.Context, desc *StreamDesc, service, metho
 		return nil, err
 	}
 
-	return &clientStream{
+	cs := &clientStream{
 		ctx:  ctx,
 		s:    s,
 		c:    c,
 		desc: desc,
-	}, nil
+	}
+	// Attach a cleanup as a safety net for callers that drop the stream
+	// without consuming it to completion. In the common case the stream is
+	// already closed by the time GC reaches it and the cleanup is a no-op.
+	// If it is still open, the caller leaked the stream; force-close it
+	// with errStreamAbandoned so the connection's receive loop is not
+	// blocked by a buffer that will never drain, and the abandon surfaces
+	// in logs with a specific cause.
+	runtime.AddCleanup(cs, finalizeClientStream, clientStreamCleanupArgs{c: c, s: s})
+	return cs, nil
+}
+
+// clientStreamCleanupArgs carries the state needed by finalizeClientStream.
+// It must not reference the *clientStream that the cleanup is attached to,
+// otherwise the cleanup would never fire.
+type clientStreamCleanupArgs struct {
+	c *Client
+	s *stream
+}
+
+// finalizeClientStream is the runtime.AddCleanup callback registered for each
+// clientStream returned by NewStream. The fast path is the common case: the
+// stream has already been closed (recvClose is closed) and there is nothing
+// to do. The slow path indicates the caller dropped the stream without
+// closing it; force-close the stream with errStreamAbandoned so the abandon
+// surfaces through the connection read loop's "failed to handle message"
+// log when a frame is in flight, and so the receive loop is not blocked by
+// a buffer that will never drain.
+func finalizeClientStream(args clientStreamCleanupArgs) {
+	select {
+	case <-args.s.recvClose:
+		return
+	default:
+	}
+	args.c.deleteStreamWithError(args.s, errStreamAbandoned)
 }
 
 func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response) error {

@@ -163,11 +163,17 @@ func (s *serviceSet) handle(ctx context.Context, req *Request, respond func(*sta
 	return nil, status.Errorf(codes.Unimplemented, "method %v", req.Method)
 }
 
-// streamRecvBufferSize is the buffer size for stream recv channels. It
-// should be large enough to absorb normal bursts without hitting the
-// 1-second timeout fallback in receive/data, but small enough that
-// per-stream memory overhead stays trivial.
-const streamRecvBufferSize = 64
+// streamRecvBufferSize is the buffer size for stream recv channels.
+//
+// Consumers are expected to either process incoming messages immediately
+// or hand them off to a goroutine, so the buffer only needs to absorb
+// brief scheduling jitter (a GC pause, a blocked syscall, the time to
+// pass a value to a worker channel). 16 is comfortably above realistic
+// jitter without inflating per-stream memory. Sustained slowness will
+// hit the streamFullTimeout fallback in stream.receive / streamHandler.data,
+// at which point either runtime.AddCleanup (for abandoned streams) or
+// ErrStreamFull (for buggy held-but-unconsumed consumers) recovers.
+const streamRecvBufferSize = 16
 
 type streamHandler struct {
 	ctx     context.Context
@@ -203,7 +209,7 @@ func (s *streamHandler) data(unmarshal Unmarshaler) error {
 			return nil
 		case <-s.ctx.Done():
 			return s.ctx.Err()
-		case <-time.After(time.Second):
+		case <-time.After(streamFullTimeout):
 			return ErrStreamFull
 		}
 	}

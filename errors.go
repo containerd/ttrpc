@@ -44,6 +44,14 @@ var (
 	ErrStreamFull = errors.New("ttrpc: stream buffer full")
 )
 
+// errStreamAbandoned is set on a stream's recvErr by the runtime cleanup
+// when the caller dropped a clientStream without closing it. It is not
+// exported because it cannot reach external callers: by the time the
+// cleanup runs every reference to the clientStream is gone, so no RecvMsg
+// or dispatch is left to observe it. Its purpose is to differentiate the
+// abandon case in the connection read loop's error log from a normal close.
+var errStreamAbandoned = errors.New("ttrpc: stream abandoned by caller")
+
 // OversizedMessageErr is used to indicate refusal to send an oversized message.
 // It wraps a ResourceExhausted grpc Status together with the offending message
 // length.

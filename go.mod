@@ -1,6 +1,6 @@
 module github.com/containerd/ttrpc
 
-go 1.23
+go 1.24
 
 require (
 	github.com/containerd/log v0.1.0
@@ -13,4 +13,4 @@ require (
 	google.golang.org/protobuf v1.36.0
 )
 
-require github.com/sirupsen/logrus v1.9.3 // indirect
+require github.com/sirupsen/logrus v1.9.3

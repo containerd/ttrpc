@@ -83,16 +83,18 @@ func TestStreamNotConsumedDoesNotBlockConnection(t *testing.T) {
 	defer server.Close()
 
 	// Create a bidirectional streaming RPC and send messages into it,
-	// but never call RecvMsg. This will fill up the stream's receive
-	// buffer (capacity 1) once the server echoes back.
+	// but never call RecvMsg. Once the server echoes back more than the
+	// client-side recv buffer can hold, the connection's receive loop
+	// will hit the buffer-full fallback in stream.receive.
 	abandonedStream, err := client.NewStream(ctx, &StreamDesc{true, true}, serviceName, "EchoStream", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Send enough messages to guarantee the server has echoed back more
-	// than the client-side buffer (capacity 1) can hold.
-	for i := 0; i < 10; i++ {
+	// Send buffer+1 messages so exactly one echo will be left blocked
+	// in stream.receive, which keeps total wait bounded by a single
+	// streamFullTimeout regardless of buffer/timeout tuning.
+	for i := 0; i < streamRecvBufferSize+1; i++ {
 		if err := abandonedStream.SendMsg(&internal.EchoPayload{
 			Seq: int64(i),
 			Msg: "abandoned",
@@ -103,15 +105,12 @@ func TestStreamNotConsumedDoesNotBlockConnection(t *testing.T) {
 		}
 	}
 
-	// Wait for the receive loop to detect the abandoned stream. The buffer
-	// fills immediately, then the 1-second timeout fires, closing the
-	// stream and unblocking the receive loop for other streams.
-	time.Sleep(2 * time.Second)
-
 	// A unary call on the same connection must succeed. Without the
-	// timeout in stream.receive, the receiveLoop would still be blocked
-	// trying to deliver to the abandoned stream.
-	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// timeout in stream.receive (or the AddCleanup on dropped streams)
+	// the receiveLoop would still be blocked trying to deliver to the
+	// abandoned stream. The deadline must clear streamFullTimeout with
+	// margin for the unary round-trip.
+	callCtx, cancel := context.WithTimeout(ctx, streamFullTimeout+5*time.Second)
 	defer cancel()
 
 	var req, resp internal.EchoPayload
@@ -202,13 +201,13 @@ func TestStreamFullOnServer(t *testing.T) {
 		t.Fatal("timed out waiting for handler to start")
 	}
 
-	// Send many messages to fill up the server's recv buffer (capacity 5).
-	// The server handler is not consuming, so these will pile up.
+	// Send buffer+1 messages so exactly one will be left blocked in the
+	// server's data(), bounding total wait by a single streamFullTimeout.
 	// We send in a goroutine because sends may eventually block.
 	sendDone := make(chan struct{})
 	go func() {
 		defer close(sendDone)
-		for i := 0; i < 20; i++ {
+		for i := 0; i < streamRecvBufferSize+1; i++ {
 			if err := slowStream.SendMsg(&internal.EchoPayload{
 				Seq: int64(i),
 				Msg: "filling buffer",
@@ -218,13 +217,10 @@ func TestStreamFullOnServer(t *testing.T) {
 		}
 	}()
 
-	// Wait for the server receive goroutine to detect the full buffer.
-	// The 1-second timeout in data() fires, after which the receive
-	// goroutine can process other streams again.
-	time.Sleep(2 * time.Second)
-
 	// Verify we can still make a unary call on the same connection.
-	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// The deadline must clear streamFullTimeout with margin for the
+	// unary round-trip.
+	callCtx, cancel := context.WithTimeout(ctx, streamFullTimeout+5*time.Second)
 	defer cancel()
 
 	var req, resp internal.EchoPayload
