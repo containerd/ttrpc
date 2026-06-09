@@ -28,4 +28,3 @@ BUF_VERSION=$(cat script/buf-version)
 
 go install "github.com/bufbuild/buf/cmd/buf@v${BUF_VERSION}"
 go install ./cmd/protoc-gen-go-ttrpc
-go install ./cmd/protoc-gen-gogottrpc

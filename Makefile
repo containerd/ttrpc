@@ -24,7 +24,7 @@ WHALE = "🇩"
 ONI = "👹"
 
 # Project binaries.
-COMMANDS=protoc-gen-go-ttrpc protoc-gen-gogottrpc
+COMMANDS=protoc-gen-go-ttrpc
 
 ifdef BUILDTAGS
     GO_BUILDTAGS = ${BUILDTAGS}
@@ -78,7 +78,7 @@ generate: protos
 	@echo "$(WHALE) $@"
 	@PATH="${ROOTDIR}/bin:${PATH}" $(GO) generate -x ${PACKAGES}
 
-protos: bin/protoc-gen-gogottrpc bin/protoc-gen-go-ttrpc ## generate protobuf
+protos: bin/protoc-gen-go-ttrpc ## generate protobuf
 	@echo "$(WHALE) $@"
 	(cd example && buf generate)
 	buf generate
