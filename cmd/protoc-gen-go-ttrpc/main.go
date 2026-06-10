@@ -18,6 +18,7 @@ package main
 
 import (
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
@@ -31,7 +32,12 @@ func main() {
 			return nil
 		},
 	}.Run(func(gen *protogen.Plugin) error {
-		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+		gen.SupportedEditionsMinimum = descriptorpb.Edition_EDITION_PROTO3
+		gen.SupportedEditionsMaximum = descriptorpb.Edition_EDITION_MAX
+		gen.SupportedFeatures = uint64(
+			pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL |
+				pluginpb.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS,
+		)
 		for _, f := range gen.Files {
 			if !f.Generate {
 				continue
