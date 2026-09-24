@@ -1,0 +1,10 @@
+// This workspace combines tool declarations from the main module and the
+// ./tools module. External tool dependencies are kept in ./tools to avoid
+// adding them to the main module's dependency graph, while allowing
+// `go tool` to resolve all project tools from the workspace.
+go 1.25.6
+
+use (
+	.
+	./tools
+)
