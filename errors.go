@@ -84,3 +84,11 @@ func (e *OversizedMessageErr) RejectedLength() int {
 func (*OversizedMessageErr) MaximumLength() int {
 	return messageLengthMax
 }
+
+type discardError struct {
+	error
+}
+
+func (e *discardError) Unwrap() error {
+	return e.error
+}
