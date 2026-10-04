@@ -2,6 +2,8 @@ module github.com/containerd/ttrpc
 
 go 1.25.0
 
+tool github.com/containerd/ttrpc/cmd/protoc-gen-go-ttrpc
+
 require (
 	github.com/containerd/log v0.1.0
 	golang.org/x/sys v0.46.0

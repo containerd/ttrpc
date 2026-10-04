@@ -4,7 +4,7 @@ plugins:
     out: .
     opt:
       - paths=source_relative
-  - local: bin/protoc-gen-go-ttrpc
+  - local: ["go", "tool", "protoc-gen-go-ttrpc"]
     out: .
     opt:
       - paths=source_relative
