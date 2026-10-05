@@ -547,7 +547,12 @@ func (c *Client) dispatch(ctx context.Context, req *Request, resp *Response) err
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-c.ctx.Done():
-		return ErrClosed
+		// If recv has a pending message, process that first.
+		select {
+		case msg = <-s.recv:
+		default:
+			return ErrClosed
+		}
 	case <-s.recvClose:
 		// If recv has a pending message, process that first
 		select {
