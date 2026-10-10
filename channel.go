@@ -23,14 +23,13 @@ import (
 	"io"
 	"net"
 	"sync"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
-	messageHeaderLength = 10
-	messageLengthMax    = 4 << 20
+	messageHeaderLength       = 10
+	MinMessageLengthLimit     = 4 << 10
+	MaxMessageLengthLimit     = 4 << 22
+	DefaultMessageLengthLimit = 4 << 20
 )
 
 type messageType uint8
@@ -96,18 +95,23 @@ func writeMessageHeader(w io.Writer, p []byte, mh messageHeader) error {
 var buffers sync.Pool
 
 type channel struct {
-	conn  net.Conn
-	bw    *bufio.Writer
-	br    *bufio.Reader
-	hrbuf [messageHeaderLength]byte // avoid alloc when reading header
-	hwbuf [messageHeaderLength]byte
+	conn      net.Conn
+	bw        *bufio.Writer
+	br        *bufio.Reader
+	hrbuf     [messageHeaderLength]byte // avoid alloc when reading header
+	hwbuf     [messageHeaderLength]byte
+	maxMsgLen int
 }
 
-func newChannel(conn net.Conn) *channel {
+func newChannel(conn net.Conn, maxMsgLen int) *channel {
+	if maxMsgLen == 0 {
+		maxMsgLen = DefaultMessageLengthLimit
+	}
 	return &channel{
-		conn: conn,
-		bw:   bufio.NewWriter(conn),
-		br:   bufio.NewReader(conn),
+		conn:      conn,
+		bw:        bufio.NewWriter(conn),
+		br:        bufio.NewReader(conn),
+		maxMsgLen: maxMsgLen,
 	}
 }
 
@@ -123,12 +127,12 @@ func (ch *channel) recv() (messageHeader, []byte, error) {
 		return messageHeader{}, nil, err
 	}
 
-	if mh.Length > uint32(messageLengthMax) {
+	if maxMsgLen := ch.maxMsgLimit(true); mh.Length > uint32(maxMsgLen) {
 		if _, err := ch.br.Discard(int(mh.Length)); err != nil {
 			return mh, nil, fmt.Errorf("failed to discard after receiving oversized message: %w", err)
 		}
 
-		return mh, nil, status.Errorf(codes.ResourceExhausted, "message length %v exceed maximum message size of %v", mh.Length, messageLengthMax)
+		return mh, nil, OversizedMessageError(int(mh.Length), maxMsgLen)
 	}
 
 	var p []byte
@@ -143,8 +147,10 @@ func (ch *channel) recv() (messageHeader, []byte, error) {
 }
 
 func (ch *channel) send(streamID uint32, t messageType, flags uint8, p []byte) error {
-	if len(p) > messageLengthMax {
-		return OversizedMessageError(len(p))
+	if maxMsgLen := ch.maxMsgLimit(false); maxMsgLen != 0 {
+		if len(p) > maxMsgLen {
+			return OversizedMessageError(len(p), maxMsgLen)
+		}
 	}
 
 	if err := writeMessageHeader(ch.bw, ch.hwbuf[:], messageHeader{Length: uint32(len(p)), StreamID: streamID, Type: t, Flags: flags}); err != nil {
@@ -179,4 +185,23 @@ func (ch *channel) getmbuf(size int) []byte {
 
 func (ch *channel) putmbuf(p []byte) {
 	buffers.Put(&p)
+}
+
+func (ch *channel) maxMsgLimit(recv bool) int {
+	if ch.maxMsgLen == 0 && recv {
+		return DefaultMessageLengthLimit
+	}
+	return ch.maxMsgLen
+}
+
+func clampWireMessageLimit(maxMsgLen int) int {
+	switch {
+	case maxMsgLen == 0:
+		return 0
+	case maxMsgLen < MinMessageLengthLimit:
+		return MinMessageLengthLimit
+	case maxMsgLen > MaxMessageLengthLimit:
+		return MaxMessageLengthLimit
+	}
+	return maxMsgLen
 }
