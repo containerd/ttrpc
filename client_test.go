@@ -18,6 +18,7 @@ package ttrpc
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -68,5 +69,47 @@ func TestUserOnCloseWait(t *testing.T) {
 
 	if err := client.UserOnCloseWait(ctx); err != nil {
 		t.Fatalf("expected error nil , but got %v", err)
+	}
+}
+
+// holdWriteConn blocks the request write until gate closes, so the call
+// reaches its select after the response and the close have been processed.
+type holdWriteConn struct {
+	net.Conn
+	gate <-chan struct{}
+}
+
+func (c *holdWriteConn) Write(b []byte) (int, error) {
+	n, err := c.Conn.Write(b)
+	<-c.gate
+	return n, err
+}
+
+func TestClientResponseBeforeClose(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Every select case is ready when the call reaches dispatch. Repeat so a
+	// random pick of the wrong case is caught.
+	for i := range 100 {
+		clientConn, serverConn := net.Pipe()
+		go func() {
+			defer serverConn.Close()
+			ch := newChannel(serverConn)
+			if mh, _, err := ch.recv(); err == nil {
+				ch.send(mh.StreamID, messageTypeResponse, 0, nil)
+			}
+		}()
+
+		gate := make(chan struct{})
+		client := NewClient(&holdWriteConn{Conn: clientConn, gate: gate})
+		go func() {
+			client.UserOnCloseWait(ctx)
+			close(gate)
+		}()
+
+		if err := client.Call(ctx, "service", "method", &Request{}, &Response{}); err != nil {
+			t.Fatalf("iteration %d: unexpected error: %v", i, err)
+		}
 	}
 }
