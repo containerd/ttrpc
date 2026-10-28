@@ -22,12 +22,14 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/containerd/log"
+	"github.com/moby/locker"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -289,6 +291,7 @@ func (s *Server) newConn(conn net.Conn, handshake any) (*serverConn, error) {
 		conn:      conn,
 		handshake: handshake,
 		shutdown:  make(chan struct{}),
+		locker:    locker.New(),
 	}
 	c.setState(connStateIdle)
 	if err := s.addConnection(c); err != nil {
@@ -306,6 +309,7 @@ type serverConn struct {
 
 	shutdownOnce sync.Once
 	shutdown     chan struct{} // forced shutdown, used by close
+	locker       *locker.Locker
 }
 
 func (c *serverConn) getState() (connState, bool) {
@@ -478,17 +482,22 @@ func (c *serverConn) run(sctx context.Context) {
 					}
 					return nil
 				}
+				lockID := strconv.FormatUint(uint64(id), 10)
+				c.locker.Lock(lockID)
 				sh, err := c.server.services.handle(ctx, &req, respond)
 				if err != nil {
 					status, _ := status.FromError(err)
 					if !sendStatus(mh.StreamID, status) {
+						c.locker.Unlock(lockID)
 						return
 					}
+					c.locker.Unlock(lockID)
 					continue
 				}
 
 				streams.Store(id, sh)
 				atomic.AddInt32(&active, 1)
+				c.locker.Unlock(lockID)
 			}
 			// TODO: else we must ignore this for future compat. log this?
 		}
@@ -547,8 +556,11 @@ func (c *serverConn) run(sctx context.Context) {
 				// The ttrpc protocol currently does not support the case where
 				// the server is localClosed but not remoteClosed. Once the server
 				// is closing, the whole stream may be considered finished
+				lockID := strconv.FormatUint(uint64(response.id), 10)
+				c.locker.Lock(lockID)
 				streams.Delete(response.id)
 				atomic.AddInt32(&active, -1)
+				c.locker.Unlock(lockID)
 			}
 		case err := <-recvErr:
 			// TODO(stevvooe): Not wildly clear what we should do in this
