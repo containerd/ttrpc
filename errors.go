@@ -44,6 +44,40 @@ var (
 	ErrStreamFull = errors.New("ttrpc: stream buffer full")
 )
 
+// closeConnectionErr wraps an error whose delivery closes the connection.
+// Unexported because its zero value wraps a nil error, which encodes as a
+// response with no status: CloseConnectionError is the only way to obtain
+// one, and it never wraps nil.
+type closeConnectionErr struct {
+	err error
+}
+
+// CloseConnectionError returns err wrapped so that the server delivers err
+// and then closes the connection, discarding any other response queued for
+// it. Returns nil if err is nil, and err itself if it is already wrapped.
+func CloseConnectionError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// Wrapping twice would bury err deeper than the server unwraps it.
+	if _, ok := err.(*closeConnectionErr); ok {
+		return err
+	}
+
+	return &closeConnectionErr{err: err}
+}
+
+// Error returns the message of the wrapped error.
+func (e *closeConnectionErr) Error() string {
+	return e.err.Error()
+}
+
+// Unwrap returns the wrapped error.
+func (e *closeConnectionErr) Unwrap() error {
+	return e.err
+}
+
 // OversizedMessageErr is used to indicate refusal to send an oversized message.
 // It wraps a ResourceExhausted grpc Status together with the offending message
 // length.
