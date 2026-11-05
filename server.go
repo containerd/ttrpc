@@ -306,6 +306,8 @@ type serverConn struct {
 
 	shutdownOnce sync.Once
 	shutdown     chan struct{} // forced shutdown, used by close
+
+	closing atomic.Bool // a handler asked to close; stop processing messages
 }
 
 func (c *serverConn) getState() (connState, bool) {
@@ -325,17 +327,17 @@ func (c *serverConn) close() error {
 	return nil
 }
 
-func (c *serverConn) run(sctx context.Context) {
-	type (
-		response struct {
-			id          uint32
-			status      *status.Status
-			data        []byte
-			closeStream bool
-			streaming   bool
-		}
-	)
+// response is a message to be sent back on one of a connection's streams.
+type response struct {
+	id          uint32
+	status      *status.Status
+	data        []byte
+	closeStream bool
+	streaming   bool
+	closeConn   bool
+}
 
+func (c *serverConn) run(sctx context.Context) {
 	var (
 		ch                     = newChannel(c.conn)
 		ctx, cancel            = context.WithCancel(sctx)
@@ -397,6 +399,13 @@ func (c *serverConn) run(sctx context.Context) {
 				}
 
 				continue
+			}
+
+			if c.closing.Load() {
+				// The close response is queued or being flushed. Nothing
+				// read now could still be answered.
+				ch.putmbuf(p)
+				return
 			}
 
 			if mh.StreamID%2 != 1 {
@@ -464,15 +473,15 @@ func (c *serverConn) run(sctx context.Context) {
 				ch.putmbuf(p)
 
 				id := mh.StreamID
-				respond := func(status *status.Status, data []byte, streaming, closeStream bool) error {
+				respond := func(resp response) error {
+					resp.id = id
+					if resp.closeConn {
+						// Set before queueing, to stop processing while the
+						// response is still queued or being flushed.
+						c.closing.Store(true)
+					}
 					select {
-					case responses <- response{
-						id:          id,
-						status:      status,
-						data:        data,
-						closeStream: closeStream,
-						streaming:   streaming,
-					}:
+					case responses <- resp:
 					case <-done:
 						return ErrClosed
 					}
@@ -550,11 +559,21 @@ func (c *serverConn) run(sctx context.Context) {
 				streams.Delete(response.id)
 				atomic.AddInt32(&active, -1)
 			}
+
+			if response.closeConn {
+				// The response is flushed; the deferred Close ends it here.
+				return
+			}
 		case err := <-recvErr:
 			// TODO(stevvooe): Not wildly clear what we should do in this
 			// branch. Basically, it means that we are no longer receiving
 			// requests due to a terminal error.
 			recvErr = nil // connection is now "closing"
+			if err == nil {
+				// The receiving loop stopped on its own and closed the
+				// channel. Keep going, to flush the response it left queued.
+				continue
+			}
 			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) {
 				// The client went away and we should stop processing
 				// requests, so that the client connection is closed

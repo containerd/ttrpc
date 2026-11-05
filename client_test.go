@@ -18,6 +18,9 @@ package ttrpc
 
 import (
 	"context"
+	"errors"
+	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -68,5 +71,105 @@ func TestUserOnCloseWait(t *testing.T) {
 
 	if err := client.UserOnCloseWait(ctx); err != nil {
 		t.Fatalf("expected error nil , but got %v", err)
+	}
+}
+
+// gatedConn discards what is written to it, and holds the first write until
+// it is released.
+type gatedConn struct {
+	net.Conn
+	wrote   chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (c *gatedConn) Write(p []byte) (int, error) {
+	c.once.Do(func() { close(c.wrote) })
+	<-c.release
+	return len(p), nil
+}
+
+// callRacingClose returns what a call gets back when the client is closed
+// before the call reaches its receive select, with a response already
+// buffered for it when bufferResponse is set.
+func callRacingClose(t *testing.T, bufferResponse bool) error {
+	t.Helper()
+
+	srv, cli := net.Pipe()
+	gated := &gatedConn{
+		Conn:    cli,
+		wrote:   make(chan struct{}),
+		release: make(chan struct{}),
+	}
+
+	client := NewClient(gated)
+	defer client.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		var tp internal.TestPayload
+		errCh <- client.Call(context.Background(), serviceName, "Test",
+			&internal.TestPayload{Foo: "bar"}, &tp)
+	}()
+
+	// The write is held inside createStream, which has already registered
+	// stream 1. A response for it can be received before the call selects.
+	//
+	// Pinning that ordering relies on four properties of the client. The
+	// tests still pass if any of them changes, but then cover nothing:
+	//
+	//   - createStream registers the stream before it sends the request,
+	//     so holding the write leaves stream 1 able to receive.
+	//   - nextStreamID starts at 1, so the response below finds the call.
+	//   - a unary stream buffers one message, so the receive loop can
+	//     deliver the response and go on to read the EOF.
+	//   - run closes the client, which cancels c.ctx, before it cleans the
+	//     streams up, so c.ctx is what the call selects on.
+	<-gated.wrote
+
+	if bufferResponse {
+		payload, err := (codec{}).Marshal(&internal.TestPayload{Foo: "served"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := (codec{}).Marshal(&Response{Payload: payload})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := newChannel(srv).send(1, messageTypeResponse, 0, b); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	srv.Close()
+	<-client.ctx.Done()
+	close(gated.release)
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-time.After(testTimeout):
+		t.Fatal("the call did not return")
+		return nil
+	}
+}
+
+// A response already received must be delivered even though the connection
+// is gone, because the select that reads it also sees a closed client and
+// picks between the two at random.
+func TestClientPrefersBufferedResponseOverClose(t *testing.T) {
+	const iterations = 50
+
+	for i := range iterations {
+		if err := callRacingClose(t, true); err != nil {
+			t.Fatalf("run %d: buffered response lost: %v", i, err)
+		}
+	}
+}
+
+func TestClientReturnsErrClosedWithEmptyRecvBuffer(t *testing.T) {
+	err := callRacingClose(t, false)
+	if !errors.Is(err, ErrClosed) {
+		t.Errorf("expected %v, got %v", ErrClosed, err)
 	}
 }
