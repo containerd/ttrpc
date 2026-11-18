@@ -76,12 +76,12 @@ AUTHORS: .mailmap .git/HEAD
 
 generate: protos
 	@echo "$(WHALE) $@"
-	@PATH="${ROOTDIR}/bin:${PATH}" $(GO) generate -x ${PACKAGES}
+	$(GO) generate -x ${PACKAGES}
 
-protos: bin/protoc-gen-go-ttrpc ## generate protobuf
+protos: ## generate protobuf
 	@echo "$(WHALE) $@"
-	(cd example && buf generate)
-	buf generate
+	$(GO) -C example tool buf generate
+	$(GO) tool buf generate
 
 check-protos: protos ## check if protobufs needs to be generated again
 	@echo "$(WHALE) $@"
