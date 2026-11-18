@@ -68,7 +68,7 @@ func (s *serviceSet) register(name string, desc *ServiceDesc) {
 	s.services[name] = desc
 }
 
-func (s *serviceSet) unaryCall(ctx context.Context, method Method, info *UnaryServerInfo, data []byte) (p []byte, st *status.Status) {
+func (s *serviceSet) unaryCall(ctx context.Context, method Method, info *UnaryServerInfo, data []byte) (p []byte, st *status.Status, closeConn bool) {
 	unmarshal := func(obj any) error {
 		return protoUnmarshal(data, obj)
 	}
@@ -82,19 +82,22 @@ func (s *serviceSet) unaryCall(ctx context.Context, method Method, info *UnarySe
 		}
 	}
 
+	closeConn, err = unwrapCloseConn(err)
+
 	st, ok := status.FromError(err)
 	if !ok {
 		st = status.New(convertCode(err), err.Error())
 	}
 
-	return p, st
+	return p, st, closeConn
 }
 
-func (s *serviceSet) streamCall(ctx context.Context, stream StreamHandler, info *StreamServerInfo, ss StreamServer) (p []byte, st *status.Status) {
+func (s *serviceSet) streamCall(ctx context.Context, stream StreamHandler, info *StreamServerInfo, ss StreamServer) (p []byte, st *status.Status, closeConn bool) {
 	resp, err := s.streamInterceptor(ctx, ss, info, stream)
 	if err == nil {
 		p, err = protoMarshal(resp)
 	}
+	closeConn, err = unwrapCloseConn(err)
 	st, ok := status.FromError(err)
 	if !ok {
 		st = status.New(convertCode(err), err.Error())
@@ -102,7 +105,26 @@ func (s *serviceSet) streamCall(ctx context.Context, stream StreamHandler, info 
 	return
 }
 
-func (s *serviceSet) handle(ctx context.Context, req *Request, respond func(*status.Status, []byte, bool, bool) error) (*streamHandler, error) {
+// unwrapCloseConn returns whether err asks for the connection to be closed,
+// and the error to encode a response from.
+func unwrapCloseConn(err error) (bool, error) {
+	// Strip an outermost wrapper. convertCode compares errors for equality,
+	// so an extra wrapper would cost a wrapped sentinel error its code.
+	if closeErr, ok := err.(*closeConnectionErr); ok {
+		return true, closeErr.Unwrap()
+	}
+
+	// Keep a wrapper found deeper in the chain, to preserve the message of
+	// the error enclosing it.
+	var nested *closeConnectionErr
+	if errors.As(err, &nested) {
+		return true, err
+	}
+
+	return false, err
+}
+
+func (s *serviceSet) handle(ctx context.Context, req *Request, respond func(response) error) (*streamHandler, error) {
 	srv, ok := s.services[req.Service]
 	if !ok {
 		return nil, status.Errorf(codes.Unimplemented, "service %v", req.Service)
@@ -116,9 +138,14 @@ func (s *serviceSet) handle(ctx context.Context, req *Request, respond func(*sta
 			info := &UnaryServerInfo{
 				FullMethod: fullPath(req.Service, req.Method),
 			}
-			p, st := s.unaryCall(ctx, method, info, req.Payload)
+			p, st, closeConn := s.unaryCall(ctx, method, info, req.Payload)
 
-			respond(st, p, false, true)
+			respond(response{
+				status:      st,
+				data:        p,
+				closeStream: true,
+				closeConn:   closeConn,
+			})
 		}()
 		return nil, nil
 	}
@@ -141,8 +168,14 @@ func (s *serviceSet) handle(ctx context.Context, req *Request, respond func(*sta
 		}
 		go func() {
 			defer cancel()
-			p, st := s.streamCall(ctx, stream.Handler, info, sh)
-			respond(st, p, stream.StreamingServer, true)
+			p, st, closeConn := s.streamCall(ctx, stream.Handler, info, sh)
+			respond(response{
+				status:      st,
+				data:        p,
+				streaming:   stream.StreamingServer,
+				closeStream: true,
+				closeConn:   closeConn,
+			})
 		}()
 
 		// Empty proto messages serialized to 0 payloads,
@@ -171,7 +204,7 @@ const streamRecvBufferSize = 64
 
 type streamHandler struct {
 	ctx     context.Context
-	respond func(*status.Status, []byte, bool, bool) error
+	respond func(response) error
 	recv    chan Unmarshaler
 	info    *StreamServerInfo
 
@@ -217,7 +250,7 @@ func (s *streamHandler) SendMsg(m any) error {
 	if err != nil {
 		return err
 	}
-	return s.respond(nil, p, true, false)
+	return s.respond(response{data: p, streaming: true})
 }
 
 func (s *streamHandler) RecvMsg(m any) error {
