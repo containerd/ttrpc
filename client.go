@@ -35,9 +35,10 @@ import (
 
 // Client for a ttrpc server
 type Client struct {
-	codec   codec
-	conn    net.Conn
-	channel *channel
+	codec     codec
+	conn      net.Conn
+	channel   *channel
+	maxMsgLen int
 
 	streamLock   sync.RWMutex
 	streams      map[streamID]*stream
@@ -107,14 +108,20 @@ func chainUnaryInterceptors(interceptors []UnaryClientInterceptor, final Invoker
 	}
 }
 
+// WithClientWireMessageLimit sets the maximum allowed message length on the wire for the client.
+func WithClientWireMessageLimit(maxMsgLen int) ClientOpts {
+	maxMsgLen = clampWireMessageLimit(maxMsgLen)
+	return func(c *Client) {
+		c.maxMsgLen = maxMsgLen
+	}
+}
+
 // NewClient creates a new ttrpc client using the given connection
 func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
-	channel := newChannel(conn)
 	c := &Client{
 		codec:           codec{},
 		conn:            conn,
-		channel:         channel,
 		streams:         make(map[streamID]*stream),
 		nextStreamID:    1,
 		closed:          cancel,
@@ -126,6 +133,8 @@ func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
 	for _, o := range opts {
 		o(c)
 	}
+
+	c.channel = newChannel(conn, c.maxMsgLen)
 
 	if c.interceptor == nil {
 		c.interceptor = defaultClientInterceptor
