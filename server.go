@@ -560,6 +560,11 @@ func (c *serverConn) run(sctx context.Context) {
 				// requests, so that the client connection is closed
 				return
 			}
+			var discardErr *discardError
+			if errors.As(err, &discardErr) {
+				log.G(ctx).WithError(err).Error("discard failed")
+				return
+			}
 			log.G(ctx).WithError(err).Error("error receiving message")
 			// else, initiate shutdown
 		case <-shutdown:
